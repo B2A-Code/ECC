@@ -3,8 +3,8 @@ const USER_SHEET = 'Users';
 function getUserSession() {
   try {
     const email = Session.getActiveUser().getEmail();
-    const user = getUserByEmail(email); // already working
-    return { success: true, data: user }; // ✅ just return this!
+    const user = getUserByEmail(email);
+    return { success: true, data: user };
   } catch (err) {
     return { success: false, error: err.message };
   }
