@@ -1,25 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <base target="_top" />
   <meta charset="UTF-8" />
   <title>B2A Employee Control Centre</title>
 
-  <!-- Vuetify 2 -->
+  <!-- Vuetify 2 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/vuetify@2.6.15/dist/vuetify.min.css" rel="stylesheet">
+
+  <!-- Material Design Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.5.95/css/materialdesignicons.min.css" rel="stylesheet">
+
   <!-- ApexCharts -->
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue-apexcharts"></script>
+
   <!-- Vue 2 -->
   <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+
   <!-- Vuetify JS -->
   <script src="https://cdn.jsdelivr.net/npm/vuetify@2.6.15/dist/vuetify.min.js"></script>
 
-  <!-- Custom Fonts -->
+  <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter&family=Roboto+Slab:wght@600&display=swap" rel="stylesheet">
 
   <style>
-    html, body, #app {
+    html,
+    body,
+    #app {
       margin: 0;
       padding: 0;
       height: 100%;
@@ -31,14 +40,37 @@
       background-color: #000000 !important;
     }
 
-    h1, h2, h3, .headline, .subtitle-1 {
+    h1,
+    h2,
+    h3,
+    .headline,
+    .subtitle-1 {
       font-family: 'Roboto Slab', serif !important;
       font-weight: 600;
       color: #2c3e50;
     }
 
-    .v-app-bar, .v-navigation-drawer {
+    .v-app-bar,
+    .v-navigation-drawer {
       color: #FFFFFF !important;
+    }
+
+    .initials {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background-color: #78909c;
+      color: white;
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    .v-expansion-panel-header {
+      background-color: #424242 !important;
+      color: #ffffff !important;
     }
 
     .v-data-table-header th {
@@ -47,31 +79,36 @@
       font-weight: 500;
       background-color: #424242 !important;
     }
+
+    .v-data-table .v-data-table__row {
+      cursor: pointer;
+    }
   </style>
 </head>
+
 <body>
   <div id="app">
     <v-app dark>
-      <!-- App Bar -->
-      <v-app-bar app color="primary" dark>
+      <!-- Top App Bar -->
+      <v-app-bar app color="#000000" dark>
         <v-toolbar-title>B2A Employee Control Centre</v-toolbar-title>
         <v-spacer></v-spacer>
         <v-btn small text @click="logout">Logout</v-btn>
       </v-app-bar>
 
       <!-- Navigation Drawer -->
-      <v-navigation-drawer
-        app
-        clipped
-        permanent
-        v-model="drawer"
-        mini-variant.sync="mini"
-        class="elevation-2"
-      >
-        <!-- Profile Section -->
-        <v-list-item class="px-2">
+      <v-navigation-drawer app v-model="drawer" :mini-variant="mini" permanent @update:mini-variant="val => mini = val"
+        color="#000000" dark>
+        <v-list-item class="px-2" @click="showProfileDialog = true" style="cursor: pointer;">
           <v-list-item-avatar>
-            <v-img :src="user.Avatar || 'https://via.placeholder.com/48'" />
+            <v-avatar size="48">
+              <template v-if="user.Avatar">
+                <v-img :src="user.Avatar" />
+              </template>
+              <template v-else>
+                <span class="initials">{{ user.FirstName?.charAt(0) }}{{ user.LastName?.charAt(0) }}</span>
+              </template>
+            </v-avatar>
           </v-list-item-avatar>
 
           <v-list-item-content v-if="!mini">
@@ -82,14 +119,9 @@
 
         <v-divider></v-divider>
 
-        <!-- Navigation Items -->
+        <!-- Menu Items -->
         <v-list dense>
-          <v-list-item
-            v-for="item in menuItems"
-            :key="item.text"
-            @click="navigate(item)"
-            link
-          >
+          <v-list-item v-for="item in menuItems" :key="item.text" @click="navigate(item)" link>
             <v-list-item-icon>
               <v-icon>{{ item.icon }}</v-icon>
             </v-list-item-icon>
@@ -99,35 +131,669 @@
 
         <v-spacer></v-spacer>
 
-        <!-- Logout Button at Bottom -->
-        <v-list-item @click="logout" class="mt-auto">
-          <v-list-item-icon>
-            <v-icon>mdi-logout</v-icon>
-          </v-list-item-icon>
-          <v-list-item-title v-if="!mini">Logout</v-list-item-title>
-        </v-list-item>
+        <!-- Bottom Logout -->
+        <v-list dense>
+          <v-list-item @click="logout">
+            <v-list-item-icon>
+              <v-icon>mdi-logout</v-icon>
+            </v-list-item-icon>
+            <v-list-item-title v-if="!mini">Logout</v-list-item-title>
+          </v-list-item>
+        </v-list>
       </v-navigation-drawer>
 
-      <!-- Main Content -->
+      <!-- Main Content Area -->
       <v-main>
         <v-container fluid>
           <!-- Dashboard View -->
           <v-card v-if="view === 'dashboard'" class="ma-4 pa-4" elevation="3">
-            <v-card-title>Welcome, {{ user.FirstName }}</v-card-title>
+            <v-card-title>
+              Welcome, {{ user.FirstName }} ({{ user.Role }})
+            </v-card-title>
             <v-card-text>
-              <p><strong>Email:</strong> {{ user.Email }}</p>
-              <p><strong>Department:</strong> {{ user.Department }}</p>
-              <p><strong>Role:</strong> {{ user.Role }}</p>
+              This is your dashboard. You are signed in via your Google Account.
             </v-card-text>
           </v-card>
 
-          <!-- Placeholder for future views -->
+          <!-- Users View -->
           <v-card v-if="view === 'users'" class="ma-4 pa-4" elevation="3">
-            <v-card-title>🛠 User Management (Coming Soon)</v-card-title>
-            <v-card-text>This is where user management will go.</v-card-text>
+            <v-card-title>
+              User Management
+              <v-spacer></v-spacer>
+              <v-btn color="primary" dark @click="createUserDialog">New User</v-btn>
+            </v-card-title>
+
+            <v-data-table :headers="[
+                { text: 'Name',       value: 'FullName'        },
+                { text: 'Email',      value: 'Email'           },
+                { text: 'Role',       value: 'Role'            },
+                { text: 'Department', value: 'Department'      },
+                { text: 'Status',     value: 'account-status', sortable: false },
+                { text: 'Actions',    value: 'actions',        sortable: false }
+              ]" :items="users.map(u => ({
+                ...u,
+                FullName: `${u.FirstName} ${u.LastName}`,
+                'account-status': u.AccountStatus
+              }))" class="elevation-1" dense hide-default-footer>
+              <!-- Account Status Switch -->
+              <template v-slot:item.account-status="{ item }">
+                <v-tooltip top>
+                  <template v-slot:activator="{ on, attrs }">
+                    <div v-bind="attrs" v-on="on" style="display: inline-flex; align-items: center;">
+                      <v-switch :input-value="item['account-status'] === 'Active'" :disabled="user.Email === item.Email"
+                        @change="toggleAccountStatus(item)" inset dense hide-details
+                        :color="item['account-status'] === 'Active' ? 'success' : 'error'" />
+                    </div>
+                  </template>
+                  <span v-if="user.Email === item.Email">You cannot change your own status</span>
+                  <span v-else>Toggle account status</span>
+                </v-tooltip>
+              </template>
+
+              <!-- Actions -->
+              <template v-slot:item.actions="{ item }">
+                <v-btn icon small @click="viewUser(item)">
+                  <v-icon small color="blue">mdi-eye</v-icon>
+                </v-btn>
+                <v-btn icon small @click="editUser(item)">
+                  <v-icon small>mdi-pencil</v-icon>
+                </v-btn>
+                <v-btn icon small @click="confirmDeleteUser(item)">
+                  <v-icon small color="red">mdi-delete</v-icon>
+                </v-btn>
+              </template>
+
+              <!-- No Data Message -->
+              <template v-slot:no-data>
+                <v-alert color="warning" icon="mdi-alert">No users found.</v-alert>
+              </template>
+            </v-data-table>
           </v-card>
         </v-container>
-      </v-main>
+
+        <!-- 🧾 My Invoices -->
+        <v-container v-if="view === 'myinvoices'" fluid>
+          <v-row>
+            <v-col cols="12">
+              <v-card class="pa-4" elevation="3">
+                <v-card-title>
+                  My Invoices
+                  <v-spacer></v-spacer>
+                  <v-btn color="primary" small @click="openNewInvoiceDialog">
+                    <v-icon left>mdi-plus</v-icon> New Invoice
+                  </v-btn>
+                  <v-btn small icon @click="fetchMyInvoices">
+                    <v-icon>mdi-refresh</v-icon>
+                  </v-btn>
+                </v-card-title>
+
+                <v-divider class="my-2"></v-divider>
+
+                <v-data-table
+                  :headers="invoiceTableHeaders"
+                  :items="myInvoices"
+                  item-key="InvoiceID"
+                  dense
+                  hide-default-footer
+                >
+                  <template v-slot:item.actions="{ item }">
+                    <v-btn
+                      v-if="item.Status === 'Draft'"
+                      icon small @click="editInvoice(item)"
+                      title="Edit"
+                    >
+                      <v-icon color="blue">mdi-pencil</v-icon>
+                    </v-btn>
+                    <v-btn
+                      v-if="item.Status === 'Draft'"
+                      icon small @click="submitInvoice(item)"
+                      title="Submit to Manager"
+                    >
+                      <v-icon color="green">mdi-send</v-icon>
+                    </v-btn>
+                    <v-btn
+                      v-if="item.Status === 'Draft'"
+                      icon small @click="confirmDeleteInvoice(item)"
+                      title="Delete"
+                    >
+                      <v-icon color="red">mdi-delete</v-icon>
+                    </v-btn>
+                    <span v-else class="grey--text">—</span>
+                  </template>
+
+                  <template v-slot:no-data>
+                    <v-alert type="info">No invoices found.</v-alert>
+                  </template>
+                </v-data-table>
+              </v-card>
+            </v-col>
+          </v-row>
+        </v-container>
+
+      <!-- Profile Modal -->
+      <v-dialog v-model="showProfileDialog" max-width="600px">
+        <v-card>
+          <v-toolbar color="#000000" dark flat>
+            <v-toolbar-title>User Profile</v-toolbar-title>
+            <v-spacer></v-spacer>
+            <v-btn icon @click="showProfileDialog = false">
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </v-toolbar>
+
+          <v-card-text>
+            <v-container>
+              <v-row>
+                <v-col cols="12" class="text-center">
+                  <v-avatar size="80">
+                    <template v-if="user.Avatar">
+                      <v-img :src="user.Avatar" />
+                    </template>
+                    <template v-else>
+                      <span class="initials">{{ user.FirstName.charAt(0) }}{{ user.LastName.charAt(0) }}</span>
+                    </template>
+                  </v-avatar>
+                  <h3 class="mt-2">{{ user.FirstName }} {{ user.LastName }}</h3>
+                  <p class="subtitle-1">{{ user.Role }}</p>
+                </v-col>
+                <v-col cols="12">
+                  <p><strong>Email:</strong> {{ user.Email }}</p>
+                  <p><strong>Department:</strong> {{ user.Department }}</p>
+                  <p><strong>Date of Birth:</strong> {{ formatDate(user.DateOfBirth) }}</p>
+                  <p><strong>Joined:</strong> {{ formatDate(user.CreatedAt) }}</p>
+                </v-col>
+              </v-row>
+            </v-container>
+          </v-card-text>
+
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn text @click="showProfileDialog = false">Close</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <!-- Create, Edit, View User Modal -->
+      <v-dialog v-model="dialog" max-width="800px" persistent>
+        <v-card>
+          <v-toolbar color="#000000" dark flat>
+            <v-toolbar-title>
+              {{ dialogMode === 'edit' ? 'Edit User' : dialogMode === 'view' ? 'View User' : 'Create New User' }}
+            </v-toolbar-title>
+          </v-toolbar>
+
+          <v-divider class="my-2"></v-divider>
+
+          <v-card-text>
+            <v-expansion-panels multiple accordion>
+              <!-- Basic Info -->
+              <v-expansion-panel>
+                <v-expansion-panel-header>Basic Information</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-container>
+                    <v-row dense>
+                      <v-col cols="6">
+                        <v-text-field label="First Name" v-model="newUser.FirstName"
+                          :readonly="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="6">
+                        <v-text-field label="Last Name" v-model="newUser.LastName" :readonly="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="12">
+                        <v-text-field label="Email" v-model="newUser.Email" :readonly="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="6">
+                        <v-menu ref="dobMenu" v-model="dobMenu" :close-on-content-click="false"
+                          transition="scale-transition" offset-y min-width="290px">
+                          <template v-slot:activator="{ on, attrs }">
+                            <v-text-field v-model="newUser.DateOfBirth" label="Date of Birth"
+                              prepend-icon="mdi-calendar" readonly v-bind="attrs" v-on="on" />
+                          </template>
+                          <v-date-picker v-model="newUser.DateOfBirth" @input="dobMenu = false"
+                            :readonly="dialogMode === 'view'" />
+                        </v-menu>
+                      </v-col>
+                      <v-col cols="6">
+                        <v-text-field label="Mobile Number" v-model="newUser.MobileNumber"
+                          :readonly="dialogMode === 'view'" />
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+
+              <!-- Job Details -->
+              <v-expansion-panel>
+                <v-expansion-panel-header>Job Details</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-container>
+                    <v-row dense>
+                      <v-col cols="6">
+                        <v-select :items="roles" label="Role" v-model="newUser.Role"
+                          :disabled="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="6">
+                        <v-select :items="departments" label="Department" v-model="newUser.Department"
+                          :disabled="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="6">
+                        <v-text-field label="Hourly Rate (£)" v-model="newUser.HourlyRate" type="number"
+                          :readonly="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="6">
+                        <v-text-field label="Holiday Entitlement (hrs)" v-model="newUser.HolidayEntitlementAccruedHours"
+                          type="number" :readonly="dialogMode === 'view'" />
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+
+              <!-- Emergency Contact -->
+              <v-expansion-panel>
+                <v-expansion-panel-header>Emergency Contact</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-container>
+                    <v-row dense>
+                      <v-col cols="6">
+                        <v-text-field label="Contact Name" v-model="newUser.EmergencyContactName"
+                          :readonly="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="6">
+                        <v-text-field label="Contact Phone" v-model="newUser.EmergencyContactPhone"
+                          :readonly="dialogMode === 'view'" />
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+
+              <!-- Medical Info -->
+              <v-expansion-panel>
+                <v-expansion-panel-header>Medical Information</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-container>
+                    <v-row dense>
+                      <v-col cols="6">
+                        <v-text-field label="Health Conditions" v-model="newUser.HealthConditions"
+                          :readonly="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="6">
+                        <v-text-field label="Medication" v-model="newUser.Medication"
+                          :readonly="dialogMode === 'view'" />
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+
+              <!-- Compliance & Qualifications -->
+              <v-expansion-panel>
+                <v-expansion-panel-header>Compliance & Qualifications</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-container>
+                    <v-row dense>
+                      <v-col cols="6">
+                        <v-switch label="Bank Details Confirmed" v-model="newUser.BankDetailsConfirmation"
+                          :disabled="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="6">
+                        <v-text-field label="DBS Details" v-model="newUser.DBSDetails"
+                          :readonly="dialogMode === 'view'" />
+                      </v-col>
+                      <v-col cols="12">
+                        <v-text-field label="First Aid Qualifications" v-model="newUser.FirstAidQualifications"
+                          :readonly="dialogMode === 'view'" />
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+
+              <!-- Avatar Selection -->
+              <v-expansion-panel>
+                <v-expansion-panel-header>Avatar</v-expansion-panel-header>
+                <v-expansion-panel-content>
+                  <v-container>
+                    <v-row dense>
+                      <v-col v-for="(avatar, index) in defaultAvatars" :key="index" cols="4"
+                        class="d-flex justify-center">
+                        <v-hover v-slot:default="{ hover }">
+                          <v-avatar size="80" :class="{
+                        'elevation-6': newUser.Avatar === avatar.url,
+                        'elevation-2': newUser.Avatar !== avatar.url
+                      }" class="cursor-pointer" style="border: 2px solid transparent"
+                            @click="dialogMode !== 'view' && (newUser.Avatar = avatar.url)">
+                            <v-img :src="avatar.url" :alt="avatar.name" contain referrerpolicy="no-referrer" />
+                          </v-avatar>
+                        </v-hover>
+                      </v-col>
+                    </v-row>
+
+                    <v-row class="mt-2">
+                      <v-col cols="12">
+                        <div v-if="newUser.Avatar">
+                          <p class="subtitle-2 text-center mt-2">Selected:</p>
+                          <v-avatar size="80" class="mx-auto">
+                            <v-img :src="newUser.Avatar" referrerpolicy="no-referrer" />
+                          </v-avatar>
+                        </div>
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+
+            </v-expansion-panels>
+          </v-card-text>
+
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn text @click="dialog = false">Close</v-btn>
+            <v-btn color="primary" @click="createUser" v-if="dialogMode !== 'view'">Save</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <!-- Complete Shift Modal -->
+      <v-dialog v-model="completeDialog" max-width="500px" persistent>
+        <v-card>
+          <!-- Toolbar -->
+          <v-toolbar color="#000000" dark flat>
+            <v-toolbar-title>Complete Shift</v-toolbar-title>
+            <v-spacer></v-spacer>
+            <v-btn icon @click="completeDialog = false">
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </v-toolbar>
+
+          <v-divider class="my-2"></v-divider>
+
+          <!-- Shift Form Content -->
+          <v-card-text>
+            <v-container>
+              <v-row dense>
+                <v-col cols="12">
+                  <v-text-field label="Actual Hours Worked" v-model="actualHours" type="number" min="0" step="0.25"
+                    append-icon="mdi-clock-outline" />
+                </v-col>
+              </v-row>
+            </v-container>
+          </v-card-text>
+
+          <!-- Actions -->
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn text @click="completeDialog = false">Cancel</v-btn>
+            <v-btn color="primary" @click="submitCompletion">Submit</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <!-- 🔍 View Invoice Modal -->
+      <v-dialog v-model="viewInvoiceDialog" max-width="700px">
+        <v-card>
+          <v-toolbar color="#000000" dark flat>
+            <v-toolbar-title>Invoice Details</v-toolbar-title>
+            <v-spacer></v-spacer>
+            <v-btn icon @click="viewInvoiceDialog = false">
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </v-toolbar>
+
+          <v-card-text>
+            <v-container>
+              <v-row dense>
+                <v-col cols="6">
+                  <p><strong>Date:</strong> {{ selectedInvoice.InvoiceDate }}</p>
+                  <p><strong>Type:</strong> {{ selectedInvoice.InvoiceType }}</p>
+                  <p><strong>Status:</strong>
+                    <v-chip :color="statusColor(selectedInvoice.Status)" dark small>
+                      {{ selectedInvoice.Status }}
+                    </v-chip>
+                  </p>
+                </v-col>
+                <v-col cols="6">
+                  <p><strong>Total Amount:</strong> £{{ selectedInvoice.TotalAmount }}</p>
+                  <p><strong>Description:</strong></p>
+                  <p>{{ selectedInvoice.DescriptionOrPurpose }}</p>
+                </v-col>
+              </v-row>
+
+              <v-divider class="my-3"></v-divider>
+
+              <v-row>
+                <v-col cols="12">
+                  <p class="subtitle-2 font-weight-bold">Related Shift IDs:</p>
+                  <v-chip v-for="id in splitShiftIds(selectedInvoice.RelatedShiftIDs)" :key="id" class="ma-1" small
+                    color="primary" dark>
+                    {{ id }}
+                  </v-chip>
+                </v-col>
+              </v-row>
+            </v-container>
+          </v-card-text>
+
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn text @click="viewInvoiceDialog = false">Close</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <!-- 🧾 Create Manual Invoice Modal -->
+      <v-dialog v-model="createInvoiceDialog" max-width="600px" persistent>
+        <v-card>
+          <v-toolbar color="#000000" dark flat>
+            <v-toolbar-title>Create Manual Invoice</v-toolbar-title>
+            <v-spacer></v-spacer>
+            <v-btn icon @click="createInvoiceDialog = false">
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </v-toolbar>
+
+          <v-card-text>
+            <v-container>
+              <v-row dense>
+                <v-col cols="12" sm="6">
+                  <v-select v-model="newInvoice.InvoiceType" :items="manualInvoiceTypes" label="Invoice Type"
+                    :rules="[v => !!v || 'Required']" required />
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <v-menu ref="invoiceDateMenu" v-model="invoiceDateMenu" :close-on-content-click="false"
+                    transition="scale-transition" offset-y min-width="auto">
+                    <template v-slot:activator="{ on, attrs }">
+                      <v-text-field v-model="newInvoice.InvoiceDate" label="Invoice Date" readonly v-bind="attrs"
+                        v-on="on" prepend-icon="mdi-calendar" />
+                    </template>
+                    <v-date-picker v-model="newInvoice.InvoiceDate" @input="invoiceDateMenu = false" />
+                  </v-menu>
+                </v-col>
+
+                <v-col cols="12">
+                  <v-text-field v-model="newInvoice.TotalAmount" label="Total Amount (£)" type="number" min="0"
+                    step="0.01" />
+                </v-col>
+
+                <v-col cols="12">
+                  <v-textarea v-model="newInvoice.DescriptionOrPurpose" label="Description or Purpose" rows="3"
+                    auto-grow />
+                </v-col>
+
+                <!-- For future: file upload -->
+                <!--
+                <v-col cols="12">
+                  <v-file-input
+                    v-model="newInvoice.ReceiptFile"
+                    label="Upload Receipt (PDF/Image)"
+                    accept="application/pdf,image/*"
+                    prepend-icon="mdi-paperclip"
+                  />
+                </v-col>
+                -->
+              </v-row>
+            </v-container>
+          </v-card-text>
+
+          <!-- 🔍 Invoice Preview Dialog -->
+          <v-dialog v-model="previewInvoiceDialog" max-width="700px" persistent>
+            <v-card>
+              <v-toolbar flat color="#000000" dark>
+                <v-toolbar-title>Invoice Preview</v-toolbar-title>
+                <v-spacer></v-spacer>
+                <v-btn icon @click="previewInvoiceDialog = false">
+                  <v-icon>mdi-close</v-icon>
+                </v-btn>
+              </v-toolbar>
+
+              <v-divider class="my-2"></v-divider>
+
+              <v-card-text>
+                <v-container>
+                  <v-row>
+                    <v-col cols="6">
+                      <p><strong>Invoice ID:</strong> {{ previewInvoice.InvoiceID }}</p>
+                      <p><strong>Status:</strong> {{ previewInvoice.Status }}</p>
+                      <p><strong>Date:</strong> {{ formatDate(previewInvoice.InvoiceDate) }}</p>
+                    </v-col>
+                    <v-col cols="6">
+                      <p><strong>Total:</strong> £{{ Number(previewInvoice.TotalAmount).toFixed(2) }}</p>
+                      <p><strong>Type:</strong> {{ previewInvoice.InvoiceType }}</p>
+                    </v-col>
+                  </v-row>
+
+                  <v-divider class="my-3"></v-divider>
+
+                  <v-data-table
+                    :headers="[
+                      { text: 'Description', value: 'Description' },
+                      { text: 'Qty', value: 'Quantity' },
+                      { text: 'Unit Price', value: 'UnitPrice' },
+                      { text: 'Line Total', value: 'LineTotal' }
+                    ]"
+                    :items="previewInvoiceItems"
+                    dense
+                    hide-default-footer
+                  >
+                    <template v-slot:item.UnitPrice="{ item }">
+                      £{{ Number(item.UnitPrice).toFixed(2) }}
+                    </template>
+                    <template v-slot:item.LineTotal="{ item }">
+                      £{{ Number(item.LineTotal).toFixed(2) }}
+                    </template>
+                  </v-data-table>
+                </v-container>
+              </v-card-text>
+
+              <v-card-actions>
+                <v-spacer></v-spacer>
+                <v-btn text @click="previewInvoiceDialog = false">Close</v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-dialog>
+
+          <!-- 🧾 Department Invoices -->
+          <v-container v-if="view === 'departmentinvoices'" fluid>
+            <v-row>
+              <v-col cols="12">
+                <v-card class="pa-4" elevation="3">
+                  <v-card-title>
+                    Department Invoices
+                    <v-spacer></v-spacer>
+                    <v-btn small icon @click="fetchDepartmentInvoices">
+                      <v-icon>mdi-refresh</v-icon>
+                    </v-btn>
+                  </v-card-title>
+
+                  <v-divider class="my-2"></v-divider>
+
+                  <v-data-table
+                    :headers="invoiceTableHeadersManager"
+                    :items="departmentInvoices"
+                    item-key="InvoiceID"
+                    dense
+                    hide-default-footer
+                  >
+                    <template v-slot:item.actions="{ item }">
+                      <v-btn icon small @click="approveInvoice(item)">
+                        <v-icon color="green">mdi-check</v-icon>
+                      </v-btn>
+                      <v-btn icon small @click="rejectInvoice(item)">
+                        <v-icon color="red">mdi-close</v-icon>
+                      </v-btn>
+                    </template>
+
+                    <template v-slot:no-data>
+                      <v-alert type="info">No invoices pending approval.</v-alert>
+                    </template>
+                  </v-data-table>
+                </v-card>
+              </v-col>
+            </v-row>
+          </v-container>
+
+      <!-- 🧾 Create New Invoice Modal -->
+      <v-dialog v-model="newInvoiceDialog" max-width="600px">
+        <v-card>
+          <v-card-title>
+            <span class="text-h6">New Manual Invoice</span>
+          </v-card-title>
+          <v-card-text>
+            <v-container>
+              <v-row>
+                <v-col cols="12">
+                  <v-select
+                    :items="['CPD', 'Expense', 'Course']"
+                    label="Invoice Type"
+                    v-model="manualInvoice.InvoiceType"
+                    required
+                  />
+                </v-col>
+                <v-col cols="12">
+                  <v-text-field
+                    label="Description / Purpose"
+                    v-model="manualInvoice.DescriptionOrPurpose"
+                    required
+                  />
+                </v-col>
+                <v-col cols="12">
+                  <v-text-field
+                    label="Amount (£)"
+                    type="number"
+                    v-model="manualInvoice.TotalAmount"
+                    required
+                  />
+                </v-col>
+                <v-col cols="12">
+                  <v-file-input
+                    v-model="manualInvoice.file"
+                    label="Upload Receipt (optional)"
+                    accept="image/*,application/pdf"
+                    prepend-icon="mdi-paperclip"
+                  />
+                </v-col>
+              </v-row>
+            </v-container>
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn text @click="newInvoiceDialog = false">Cancel</v-btn>
+            <v-btn color="primary" @click="saveManualInvoice">Save Draft</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn text @click="createInvoiceDialog = false">Cancel</v-btn>
+            <v-btn color="primary" @click="submitManualInvoice">Submit</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" top right>
+        {{ snackbar.message }}
+      </v-snackbar>
     </v-app>
   </div>
 
@@ -147,12 +813,118 @@
         drawer: true,
         mini: true,
         view: 'dashboard',
-        menuItems: []
+        menuItems: [],
+        users: [],
+        showProfileDialog: false,
+        dialogMode: 'create',
+        dialog: false,
+        dobMenu: false,
+        snackbar: {
+          show: false,
+          message: '',
+          color: 'success'
+        },
+        newUser: {
+          FirstName: '',
+          LastName: '',
+          Email: '',
+          DateOfBirth: '',
+          MobileNumber: '',
+          Role: '',
+          Department: '',
+          HourlyRate: '',
+          HolidayEntitlementAccruedHours: '',
+          EmergencyContactName: '',
+          EmergencyContactPhone: '',
+          HealthConditions: '',
+          Medication: '',
+          BankDetailsConfirmation: false,
+          DBSDetails: '',
+          FirstAidQualifications: '',
+          AccountStatus: 'Active',
+          Avatar: ''
+        },
+        offeredShifts: [],
+        assignedShifts: [],
+        completeDialog: false,
+        selectedShift: null,
+        actualHours: null,
+        shiftTableHeaders: [
+          { text: 'Date', value: 'ShiftDate' },
+          { text: 'Start', value: 'StartTime' },
+          { text: 'End', value: 'EndTime' },
+          { text: 'Department', value: 'Department' },
+          { text: 'Actions', value: 'actions', sortable: false }
+        ],
+        shiftTableHeadersAssigned: [
+          { text: 'Date', value: 'ShiftDate' },
+          { text: 'Start', value: 'StartTime' },
+          { text: 'End', value: 'EndTime' },
+          { text: 'Status', value: 'Status' },
+          { text: 'Actual Hours', value: 'ActualHoursWorked' },
+          { text: 'Actions', value: 'actions', sortable: false }
+        ],
+        myInvoices: [],
+        previewInvoiceDialog: false,
+        previewInvoice: {},
+        previewInvoiceItems: [],
+        viewInvoiceDialog: false,
+        selectedInvoice: {},
+        isEditing: false,
+        createInvoiceDialog: false,
+        invoiceDateMenu: false,
+        manualInvoiceTypes: ['CPD', 'Expense', 'Course'],
+        newInvoice: {
+          InvoiceType: '',
+          InvoiceDate: '',
+          TotalAmount: '',
+          DescriptionOrPurpose: '',
+          ReceiptFile: null,
+        },
+        invoiceTableHeaders: [
+          { text: 'Date', value: 'InvoiceDate' },
+          { text: 'Type', value: 'InvoiceType' },
+          { text: 'Amount (£)', value: 'TotalAmount' },
+          { text: 'Status', value: 'Status' },
+          { text: 'Purpose', value: 'DescriptionOrPurpose' },
+          { text: 'Actions', value: 'actions', sortable: false }
+        ],
+        newInvoiceDialog: false,
+        departmentInvoices: [],
+        invoiceTableHeadersManager: [
+          { text: 'Date', value: 'InvoiceDate' },
+          { text: 'Type', value: 'InvoiceType' },
+          { text: 'Employee', value: 'EmployeeName' },
+          { text: 'Amount', value: 'TotalAmount' },
+          { text: 'Status', value: 'Status' },
+          { text: 'Actions', value: 'actions', sortable: false }
+        ],
+        roles: ['Administrator', 'Manager', 'Employee', 'CFO'],
+        departments: ['SIC', 'Performance', 'Operations', 'Creative', 'B2AFC'],
+        defaultAvatars: [
+          { name: 'Avatar 1', url: "https://i.imgur.com/oUwa7Cp.png" },
+          { name: 'Avatar 2', url: "https://i.imgur.com/hOXDMjL.png" },
+          { name: 'Avatar 3', url: "https://i.imgur.com/FruCSSo.png" },
+          { name: 'Avatar 4', url: "https://i.imgur.com/3k6vlod.png" },
+          { name: 'Avatar 5', url: "https://i.imgur.com/GWi8dIT.png" },
+          { name: 'Avatar 6', url: "https://i.imgur.com/sXTnvXJ.png" },
+          { name: 'Avatar 7', url: "https://i.imgur.com/Lo3TtOG.png" },
+          { name: 'Avatar 8', url: "https://i.imgur.com/cv25eU6.png" },
+          { name: 'Avatar 9', url: "https://i.imgur.com/QViei3X.png" },
+          { name: 'Avatar 10', url: "https://i.imgur.com/KeF2S2I.png" },
+          { name: 'Avatar 11', url: "https://i.imgur.com/mnjnF0P.png" },
+          { name: 'Avatar 12', url: "https://i.imgur.com/kwti8sD.png" },
+          { name: 'Avatar 13', url: "https://i.imgur.com/pGPh6sy.png" },
+          { name: 'Avatar 14', url: "https://i.imgur.com/xKXLi9C.png" },
+          { name: 'Avatar 15', url: "https://i.imgur.com/hI7LeoX.png" },
+          { name: 'Avatar 16', url: "https://i.imgur.com/BCgc4bR.png" },
+          { name: 'Avatar 17', url: "https://i.imgur.com/V4nuXxZ.png" },
+          { name: 'Avatar 18', url: "https://i.imgur.com/5VseQPv.png" }
+        ]
       }),
       methods: {
         setupMenu() {
           const role = this.user.Role;
-
           if (role === 'Administrator') {
             this.menuItems = [
               { text: 'Dashboard', icon: 'mdi-view-dashboard' },
@@ -183,30 +955,425 @@
         },
         navigate(item) {
           this.view = item.text.toLowerCase().replace(/\s+/g, '');
+          if (this.view === 'users') this.fetchAllUsers();
+          else if (this.view === 'myinvoices') this.fetchMyInvoices();
+        },
+        fetchAllUsers() {
+          const self = this;
+          google.script.run
+            .withSuccessHandler(res => {
+              if (Array.isArray(res)) {
+                self.users = res;
+              } else {
+                self.showSnackbar('Failed to fetch users', 'error');
+              }
+            })
+            .withFailureHandler(err => {
+              self.showSnackbar('⚠️ Script error: ' + err.message, 'error');
+            })
+            .getAllUsers();
+        },
+        createUser() {
+          const formatDate = (date) => {
+            if (!date) return '';
+            return typeof date === 'string' ? date : new Date(date).toISOString();
+          };
+
+          const payload = {
+            ...this.newUser,
+            DateOfBirth: formatDate(this.newUser.DateOfBirth),
+            Avatar: this.newUser.Avatar?.url || this.newUser.Avatar || '',
+            CreatedAt: this.dialogMode === 'edit' ? this.newUser.CreatedAt : new Date().toISOString(),
+            UpdatedAt: new Date().toISOString(),
+            BankDetailsConfirmation: !!this.newUser.BankDetailsConfirmation
+          };
+
+          const runner = google.script.run
+            .withSuccessHandler((res) => {
+              if (res.success) {
+                this.dialog = false;
+                this.fetchAllUsers?.();
+                this.showSnackbar(`✅ User ${this.dialogMode === 'edit' ? 'updated' : 'created'} successfully!`, 'success');
+                this.resetForm();
+              } else {
+                this.showSnackbar(`❌ Failed to ${this.dialogMode === 'edit' ? 'update' : 'create'} user: ` + res.error, 'error');
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar(`⚠️ Script error: ${err.message}`, 'error');
+            });
+
+          if (this.dialogMode === 'edit') {
+            runner.updateUser(payload);
+          } else {
+            runner.createUser(payload);
+          }
+        },
+        resetForm() {
+          this.newUser = {
+            FirstName: '',
+            LastName: '',
+            Email: '',
+            DateOfBirth: '',
+            MobileNumber: '',
+            Role: '',
+            Department: '',
+            HourlyRate: '',
+            HolidayEntitlementAccruedHours: '',
+            EmergencyContactName: '',
+            EmergencyContactPhone: '',
+            HealthConditions: '',
+            Medication: '',
+            BankDetailsConfirmation: false,
+            DBSDetails: '',
+            FirstAidQualifications: '',
+            AccountStatus: 'Active',
+            Avatar: ''
+          };
+        },
+        editUser(user) {
+          this.newUser = { ...user };
+          this.dialogMode = 'edit';
+          this.dialog = true;
+        },
+        viewUser(user) {
+          this.newUser = { ...user };
+          this.dialogMode = 'view';
+          this.dialog = true;
+        },
+        createUserDialog() {
+          this.resetForm();
+          this.dialogMode = 'create';
+          this.dialog = true;
+        },
+        confirmDeleteUser(user) {
+          if (confirm(`Are you sure you want to delete ${user.FirstName} ${user.LastName}?`)) {
+            this.deleteUser(user.UserID);
+          }
+        },
+        deleteUser(userId) {
+          google.script.run
+            .withSuccessHandler(() => {
+              this.showSnackbar("✅ User deleted", "success");
+              this.fetchAllUsers();
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("❌ Delete failed: " + err.message, "error");
+            })
+            .deleteUserById(userId);
+        },
+        toggleAccountStatus(user) {
+          const newStatus = user.AccountStatus === 'Active' ? 'Disabled' : 'Active';
+          const updatedUser = {
+            ...user,
+            AccountStatus: newStatus,
+            UpdatedAt: new Date().toISOString()
+          };
+
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res.success) {
+                this.showSnackbar(`✔️ Account status changed to ${newStatus}`, 'success');
+                this.fetchAllUsers();
+              } else {
+                this.showSnackbar(`❌ Failed to update user status: ${res.error}`, 'error');
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar(`⚠️ Script error: ${err.message}`, 'error');
+            })
+            .updateUser(updatedUser);
+        },
+        loadMyShifts() {
+          google.script.run
+            .withSuccessHandler((res) => {
+              this.offeredShifts = res.available || [];
+              this.assignedShifts = res.assigned || [];
+            })
+            .withFailureHandler(err => {
+              this.showSnackbar("❌ Failed to load shifts: " + err.message, "error");
+            })
+            .getEmployeeShifts(); // We'll wrap this in Apps Script to return both lists
+        },
+        acceptShift(shift) {
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res.success) {
+                this.showSnackbar("✅ Shift accepted", "success");
+                this.loadMyShifts();
+              } else {
+                this.showSnackbar("❌ " + res.error, "error");
+              }
+            })
+            .withFailureHandler(err => {
+              this.showSnackbar("❌ Error accepting shift: " + err.message, "error");
+            })
+            .acceptShift(shift.ShiftID);
+        },
+        openCompleteDialog(shift) {
+          this.selectedShift = shift;
+          this.actualHours = shift.ActualHoursWorked || '';
+          this.completeDialog = true;
+        },
+        submitCompletion() {
+          const shiftId = this.selectedShift?.ShiftID;
+          const hours = parseFloat(this.actualHours);
+          if (!shiftId || isNaN(hours)) {
+            this.showSnackbar("⚠️ Enter valid hours.", "warning");
+            return;
+          }
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res.success) {
+                this.showSnackbar("✅ Shift marked complete", "success");
+                this.completeDialog = false;
+                this.loadMyShifts();
+              } else {
+                this.showSnackbar("❌ " + res.error, "error");
+              }
+            })
+            .withFailureHandler(err => {
+              this.showSnackbar("❌ Error: " + err.message, "error");
+            })
+            .markShiftComplete(shiftId, hours);
+        },
+        fetchMyInvoices() {
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (Array.isArray(res)) {
+                this.myInvoices = res;
+              } else {
+                this.showSnackbar("❌ Failed to load invoices", "error");
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("⚠️ Script error: " + err.message, "error");
+            })
+            .getMyInvoices();
+        },
+        submitInvoice(invoiceId) {
+          if (!invoiceId) return;
+          if (!confirm("Submit this invoice for approval?")) return;
+
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res.success) {
+                this.showSnackbar("✅ Invoice submitted", "success");
+                this.fetchMyInvoices();
+              } else {
+                this.showSnackbar("❌ Failed to submit invoice", "error");
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("⚠️ Script error: " + err.message, "error");
+            })
+            .submitInvoice(invoiceId);
+        },
+        splitShiftIds(idsString) {
+          if (!idsString) return [];
+          return idsString.split(',').map(id => id.trim());
+        },
+        statusColor(status) {
+          switch (status) {
+            case 'Draft': return 'grey';
+            case 'Submitted': return 'blue';
+            case 'ManagerApproved': return 'green';
+            case 'CFOApproved': return 'teal';
+            case 'Paid': return 'purple';
+            case 'Rejected': return 'red';
+            default: return 'grey';
+          }
+        },
+        viewInvoice(invoice) {
+          this.selectedInvoice = invoice;
+          this.viewInvoiceDialog = true;
+        },
+        viewInvoice(item) {
+          this.previewInvoice = item;
+          this.previewInvoiceItems = [];
+
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (Array.isArray(res)) {
+                this.previewInvoiceItems = res;
+                this.previewInvoiceDialog = true;
+              } else {
+                this.showSnackbar("❌ Could not load invoice items", "error");
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("⚠️ Script error: " + err.message, "error");
+            })
+            .getInvoiceItemsByInvoiceId(item.InvoiceID);
+        },
+        openCreateInvoiceDialog() {
+          this.resetInvoiceForm();
+          this.createInvoiceDialog = true;
+        },
+        openNewInvoiceDialog() {
+          this.manualInvoice = {
+            InvoiceType: '',
+            DescriptionOrPurpose: '',
+            TotalAmount: '',
+            file: null
+          };
+          this.newInvoiceDialog = true;
+        },
+        saveManualInvoice() {
+          const invoiceData = {
+            InvoiceType: this.manualInvoice.InvoiceType,
+            DescriptionOrPurpose: this.manualInvoice.DescriptionOrPurpose,
+            TotalAmount: parseFloat(this.manualInvoice.TotalAmount),
+            FileBase64: '' // Optional: implement upload logic
+          };
+
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res.success) {
+                this.showSnackbar('✅ Manual invoice saved');
+                this.newInvoiceDialog = false;
+                this.fetchMyInvoices();
+              } else {
+                this.showSnackbar('❌ ' + res.error, 'error');
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar('⚠️ Script error: ' + err.message, 'error');
+            })
+            .createManualInvoice(invoiceData);
+        },
+        fetchDepartmentInvoices() {
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (Array.isArray(res)) {
+                this.departmentInvoices = res;
+              } else {
+                this.showSnackbar("❌ Failed to load department invoices", "error");
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("⚠️ Script error: " + err.message, "error");
+            })
+            .getDepartmentInvoicesForApproval();
+        },
+        approveInvoice(item) {
+          google.script.run
+            .withSuccessHandler(() => {
+              this.showSnackbar("✅ Invoice approved");
+              this.fetchDepartmentInvoices();
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("❌ " + err.message, "error");
+            })
+            .approveOrRejectInvoice(item.InvoiceID, "approve", "");
+        },
+        rejectInvoice(item) {
+          const reason = prompt("Enter reason for rejection:");
+          if (!reason) return;
+
+          google.script.run
+            .withSuccessHandler(() => {
+              this.showSnackbar("❌ Invoice rejected");
+              this.fetchDepartmentInvoices();
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("⚠️ " + err.message, "error");
+            })
+            .approveOrRejectInvoice(item.InvoiceID, "reject", reason);
+        },
+        resetInvoiceForm() {
+          this.newInvoice = {
+            InvoiceType: '',
+            InvoiceDate: '',
+            TotalAmount: '',
+            DescriptionOrPurpose: ''
+          };
+          this.invoiceDateMenu = false;
+        },
+        submitManualInvoice() {
+          const payload = {
+            ...this.newInvoice,
+            InvoiceDate: this.newInvoice.InvoiceDate || new Date().toISOString().split('T')[0],
+            TotalAmount: parseFloat(this.newInvoice.TotalAmount) || 0,
+            Status: 'Draft',
+            CreatedAt: new Date().toISOString(),
+            UpdatedAt: new Date().toISOString()
+          };
+
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res.success) {
+                this.createInvoiceDialog = false;
+                this.fetchMyInvoices?.();
+                this.showSnackbar("✅ Invoice created as Draft", "success");
+                this.resetInvoiceForm();
+              } else {
+                this.showSnackbar("❌ Failed to create invoice: " + res.error, "error");
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("⚠️ Script error: " + err.message, "error");
+            })
+            .createManualInvoice(payload);
+        },
+        confirmDeleteInvoice(invoice) {
+          if (confirm(`Delete invoice created on ${invoice.InvoiceDate}?`)) {
+            this.deleteInvoice(invoice.InvoiceID);
+          }
+        },
+        deleteInvoice(id) {
+          google.script.run
+            .withSuccessHandler(() => {
+              this.showSnackbar("✅ Invoice deleted", "success");
+              this.fetchMyInvoices();
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("❌ Delete failed: " + err.message, "error");
+            })
+            .deleteInvoiceById(id);
+        },
+        formatDate(iso) {
+          if (!iso) return '';
+          const d = new Date(iso);
+          return d.toLocaleDateString('en-GB');
+        },
+        showSnackbar(message, color = 'success') {
+          this.snackbar.message = message;
+          this.snackbar.color = color;
+          this.snackbar.show = true;
         },
         logout() {
-          alert('Logout feature not yet implemented.');
+          this.user = {
+            FirstName: '',
+            LastName: '',
+            Email: '',
+            Role: '',
+            Department: '',
+            Avatar: ''
+          };
+          this.view = 'dashboard';
+          this.menuItems = [];
+          this.showSnackbar("🚪 Logged out", "info");
         }
       },
       created() {
-        const self = this;
         google.script.run
-          .withSuccessHandler(function(res) {
-            console.log("RES FROM getUserSession:", res);
+          .withSuccessHandler((res) => {
             if (res && res.success) {
-              self.user = res.data;
-              self.setupMenu();
+              this.user = res.data;
+              this.setupMenu();
+              this.fetchAllUsers();
             } else {
-              alert(res?.error || 'User not found or invalid response.');
+              this.showSnackbar(res?.error || 'User not found', 'error');
             }
           })
-          .withFailureHandler(function(err) {
-            console.error("Error calling getUserSession:", err);
-            alert('Script error: ' + err.message);
+          .withFailureHandler((err) => {
+            this.showSnackbar('⚠️ Script error: ' + err.message, 'error');
           })
           .getUserSession();
       }
     });
   </script>
 </body>
+
 </html>
