@@ -63,3 +63,42 @@ function jsonError(message) {
   return ContentService.createTextOutput(JSON.stringify({ success: false, error: message }))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+function forceUserAuth() {
+  Logger.log('🔐 [forceUserAuth] Function called');
+
+  const email = Session.getActiveUser().getEmail();
+  Logger.log(`📧 [forceUserAuth] Retrieved Email: "${email}"`);
+
+  if (!email) {
+    Logger.log('⚠️ [forceUserAuth] Email is empty — user likely has not authorized access');
+    throw new Error(
+      'You must authorize the app to continue. Please visit the login link directly to grant permission.'
+    );
+  }
+
+  // 🔍 Check if ScriptVerified = TRUE in Users sheet
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const usersSheet = ss.getSheetByName("Users");
+  const data = usersSheet.getDataRange().getValues();
+  const headers = data[0];
+  const emailCol = headers.indexOf("Email");
+  const verifiedCol = headers.indexOf("ScriptVerified");
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][emailCol] === email) {
+      if (data[i][verifiedCol] === true) {
+        Logger.log("✅ [forceUserAuth] Script already verified");
+        return email;
+      }
+
+      // ✅ Mark as verified
+      usersSheet.getRange(i + 1, verifiedCol + 1).setValue(true);
+      Logger.log("🆕 [forceUserAuth] Marked script as verified");
+      return email;
+    }
+  }
+
+  Logger.log("❌ [forceUserAuth] User not found in sheet");
+  throw new Error("User not found. Please ensure you are registered.");
+}

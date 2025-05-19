@@ -144,6 +144,15 @@
 
       <!-- Main Content Area -->
       <v-main>
+        <v-container v-if="!sessionInitialized && authTried" class="fill-height" fluid>
+          <v-row align="center" justify="center">
+            <v-col cols="auto">
+              <v-btn color="primary" @click="startAppManually">
+                Start / Continue
+              </v-btn>
+            </v-col>
+          </v-row>
+        </v-container>
         <v-container fluid>
           <!-- Dashboard View -->
           <v-card v-if="view === 'dashboard'" class="ma-4 pa-4" elevation="3">
@@ -209,419 +218,578 @@
               </template>
             </v-data-table>
           </v-card>
-        </v-container>
 
-        <!-- 🧾 My Invoices -->
-        <v-container v-if="view === 'myinvoices'" fluid>
-          <v-row>
-            <v-col cols="12">
-              <v-card class="pa-4" elevation="3">
-                <v-card-title>
-                  My Invoices
-                  <v-spacer></v-spacer>
-                  <v-btn color="primary" small @click="openNewInvoiceDialog">
-                    <v-icon left>mdi-plus</v-icon> New Invoice
-                  </v-btn>
-                  <v-btn small icon @click="fetchMyInvoices">
-                    <v-icon>mdi-refresh</v-icon>
-                  </v-btn>
-                </v-card-title>
+          <!-- 👤 My Shifts -->
+          <v-card v-if="view === 'myshifts'" class="ma-4 pa-4" elevation="3">
+            <v-card-title>
+              My Shifts
+              <v-spacer></v-spacer>
+              <v-btn small icon @click="loadMyShifts">
+                <v-icon>mdi-refresh</v-icon>
+              </v-btn>
+            </v-card-title>
 
-                <v-divider class="my-2"></v-divider>
+            <v-divider class="my-2"></v-divider>
 
-                <v-data-table
-                  :headers="invoiceTableHeaders"
-                  :items="myInvoices"
-                  item-key="InvoiceID"
-                  dense
-                  hide-default-footer
-                >
-                  <template v-slot:item.actions="{ item }">
-                    <v-btn
-                      v-if="item.Status === 'Draft'"
-                      icon small @click="editInvoice(item)"
-                      title="Edit"
-                    >
-                      <v-icon color="blue">mdi-pencil</v-icon>
-                    </v-btn>
-                    <v-btn
-                      v-if="item.Status === 'Draft'"
-                      icon small @click="submitInvoice(item)"
-                      title="Submit to Manager"
-                    >
-                      <v-icon color="green">mdi-send</v-icon>
-                    </v-btn>
-                    <v-btn
-                      v-if="item.Status === 'Draft'"
-                      icon small @click="confirmDeleteInvoice(item)"
-                      title="Delete"
-                    >
-                      <v-icon color="red">mdi-delete</v-icon>
-                    </v-btn>
-                    <span v-else class="grey--text">—</span>
-                  </template>
-
-                  <template v-slot:no-data>
-                    <v-alert type="info">No invoices found.</v-alert>
-                  </template>
-                </v-data-table>
-              </v-card>
-            </v-col>
-          </v-row>
-        </v-container>
-
-      <!-- Profile Modal -->
-      <v-dialog v-model="showProfileDialog" max-width="600px">
-        <v-card>
-          <v-toolbar color="#000000" dark flat>
-            <v-toolbar-title>User Profile</v-toolbar-title>
-            <v-spacer></v-spacer>
-            <v-btn icon @click="showProfileDialog = false">
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
-          </v-toolbar>
-
-          <v-card-text>
-            <v-container>
-              <v-row>
-                <v-col cols="12" class="text-center">
-                  <v-avatar size="80">
-                    <template v-if="user.Avatar">
-                      <v-img :src="user.Avatar" />
+            <v-card-text>
+              <v-row dense>
+                <!-- Offered Shifts -->
+                <v-col cols="12" md="6">
+                  <h3 class="subtitle-1">Offered Shifts</h3>
+                  <v-data-table :headers="shiftTableHeaders" :items="offeredShifts" item-key="shift-id" dense
+                    hide-default-footer>
+                    <template v-slot:item.assigned-to="{ item }">
+                      <span>{{ item['assigned-full-name'] || item['assigned-user-id'] || '—' }}</span>
                     </template>
-                    <template v-else>
-                      <span class="initials">{{ user.FirstName.charAt(0) }}{{ user.LastName.charAt(0) }}</span>
+                    <template v-slot:item.actions="{ item }">
+                      <v-tooltip top>
+                        <template v-slot:activator="{ on, attrs }">
+                          <v-btn icon small v-bind="attrs" v-on="on" @click="acceptShift(item)">
+                            <v-icon color="orange">mdi-help-circle-outline</v-icon>
+                          </v-btn>
+                        </template>
+                        <span>Accept shift</span>
+                      </v-tooltip>
                     </template>
-                  </v-avatar>
-                  <h3 class="mt-2">{{ user.FirstName }} {{ user.LastName }}</h3>
-                  <p class="subtitle-1">{{ user.Role }}</p>
+                    <template v-slot:no-data>
+                      <v-alert type="info">No offered shifts</v-alert>
+                    </template>
+                  </v-data-table>
                 </v-col>
-                <v-col cols="12">
-                  <p><strong>Email:</strong> {{ user.Email }}</p>
-                  <p><strong>Department:</strong> {{ user.Department }}</p>
-                  <p><strong>Date of Birth:</strong> {{ formatDate(user.DateOfBirth) }}</p>
-                  <p><strong>Joined:</strong> {{ formatDate(user.CreatedAt) }}</p>
+
+                <!-- Assigned Shifts -->
+                <v-col cols="12" md="6">
+                  <h3 class="subtitle-1">Assigned Shifts</h3>
+                  <v-data-table :headers="shiftTableHeadersAssigned" :items="assignedShifts" item-key="shift-id" dense
+                    hide-default-footer>
+                    <template v-slot:item.status="{ item }">
+                      <v-chip :color="statusColor(item.Status)" dark small>
+                        {{ item.Status }}
+                      </v-chip>
+                    </template>
+                    <template v-slot:item.actions="{ item }">
+                      <v-btn icon small @click="openShiftActionDialog(item)">
+                        <v-icon color="blue">mdi-tools</v-icon>
+                      </v-btn>
+                    </template>
+                    <template v-slot:no-data>
+                      <v-alert type="info">No assigned shifts</v-alert>
+                    </template>
+                  </v-data-table>
                 </v-col>
               </v-row>
-            </v-container>
-          </v-card-text>
+            </v-card-text>
+          </v-card>
 
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn text @click="showProfileDialog = false">Close</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+          <!-- 👥 Team Shifts -->
+          <v-card v-if="view === 'teamshifts'" class="ma-4 pa-4" elevation="3">
+            <v-card-title>
+              Team Shifts — Department: {{ user.Department }}
+              <v-spacer></v-spacer>
+              <v-btn small icon @click="fetchTeamShifts">
+                <v-icon>mdi-refresh</v-icon>
+              </v-btn>
+            </v-card-title>
 
-      <!-- Create, Edit, View User Modal -->
-      <v-dialog v-model="dialog" max-width="800px" persistent>
-        <v-card>
-          <v-toolbar color="#000000" dark flat>
-            <v-toolbar-title>
-              {{ dialogMode === 'edit' ? 'Edit User' : dialogMode === 'view' ? 'View User' : 'Create New User' }}
-            </v-toolbar-title>
-          </v-toolbar>
+            <v-card-text>
+              <v-btn color="primary" small @click="openCreateShiftDialog">
+                <v-icon left>mdi-plus</v-icon> Create Shift
+              </v-btn>
 
-          <v-divider class="my-2"></v-divider>
+              <v-data-table :headers="managerShiftTableHeaders" :items="teamShifts" item-key="shift-id" dense
+                hide-default-footer>
+                <!-- ✅ FIXED: SINGLE slot definition -->
+                <template v-slot:item.assigned-to="{ item }">
+                  <span>{{ item['assigned-full-name'] || item['assigned-user-id'] || '—' }}</span>
+                </template>
 
-          <v-card-text>
-            <v-expansion-panels multiple accordion>
-              <!-- Basic Info -->
-              <v-expansion-panel>
-                <v-expansion-panel-header>Basic Information</v-expansion-panel-header>
-                <v-expansion-panel-content>
-                  <v-container>
-                    <v-row dense>
-                      <v-col cols="6">
-                        <v-text-field label="First Name" v-model="newUser.FirstName"
-                          :readonly="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="6">
-                        <v-text-field label="Last Name" v-model="newUser.LastName" :readonly="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="12">
-                        <v-text-field label="Email" v-model="newUser.Email" :readonly="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="6">
-                        <v-menu ref="dobMenu" v-model="dobMenu" :close-on-content-click="false"
-                          transition="scale-transition" offset-y min-width="290px">
-                          <template v-slot:activator="{ on, attrs }">
-                            <v-text-field v-model="newUser.DateOfBirth" label="Date of Birth"
-                              prepend-icon="mdi-calendar" readonly v-bind="attrs" v-on="on" />
-                          </template>
-                          <v-date-picker v-model="newUser.DateOfBirth" @input="dobMenu = false"
+                <template v-slot:item.status="{ item }">
+                  <v-chip :color="statusColor(item.Status)" dark small>
+                    {{ item.Status }}
+                  </v-chip>
+                </template>
+
+                <template v-slot:item.actions="{ item }">
+                  <v-btn icon small @click="editShift(item)">
+                    <v-icon color="blue">mdi-pencil</v-icon>
+                  </v-btn>
+                  <v-btn icon small @click="viewShift(item)">
+                    <v-icon color="green">mdi-eye</v-icon>
+                  </v-btn>
+                  <v-btn icon small @click="confirmDeleteShift(item)">
+                    <v-icon color="red">mdi-delete</v-icon>
+                  </v-btn>
+                </template>
+
+                <template v-slot:no-data>
+                  <v-alert type="info">No team shifts found for {{ user.Department }}</v-alert>
+                </template>
+              </v-data-table>
+            </v-card-text>
+          </v-card>
+
+          <!-- 🧾 My Invoices -->
+          <v-card v-if="view === 'myinvoices'" class="ma-4 pa-4" elevation="3">
+            <v-card-title>
+              My Invoices
+              <v-spacer></v-spacer>
+              <v-btn color="primary" small @click="openNewInvoiceDialog">
+                <v-icon left>mdi-plus</v-icon> New Invoice
+              </v-btn>
+              <v-btn small icon @click="fetchMyInvoices">
+                <v-icon>mdi-refresh</v-icon>
+              </v-btn>
+            </v-card-title>
+
+            <v-divider class="my-2"></v-divider>
+
+            <v-card-text>
+              <v-data-table :headers="invoiceTableHeaders" :items="myInvoices" item-key="invoice-id" dense
+                hide-default-footer>
+                <template v-slot:item.status="{ item }">
+                  <v-chip :color="statusColor(item.Status)" small dark>
+                    {{ item.Status }}
+                  </v-chip>
+                </template>
+
+                <template v-slot:item.actions="{ item }">
+                  <v-btn v-if="item.Status === 'Draft'" icon small @click="editInvoice(item)" title="Edit">
+                    <v-icon color="blue">mdi-pencil</v-icon>
+                  </v-btn>
+                  <v-btn v-if="item.Status === 'Draft'" icon small @click="submitInvoice(item)"
+                    title="Submit to Manager">
+                    <v-icon color="green">mdi-send</v-icon>
+                  </v-btn>
+                  <v-btn v-if="item.Status === 'Draft'" icon small @click="confirmDeleteInvoice(item)" title="Delete">
+                    <v-icon color="red">mdi-delete</v-icon>
+                  </v-btn>
+                  <span v-else class="grey--text">—</span>
+                </template>
+
+                <template v-slot:no-data>
+                  <v-alert type="info">No invoices found.</v-alert>
+                </template>
+              </v-data-table>
+            </v-card-text>
+          </v-card>
+
+
+
+        </v-container>
+
+        <!-- Profile Modal -->
+        <v-dialog v-model="showProfileDialog" max-width="600px">
+          <v-card>
+            <v-toolbar color="#000000" dark flat>
+              <v-toolbar-title>User Profile</v-toolbar-title>
+              <v-spacer></v-spacer>
+              <v-btn icon @click="showProfileDialog = false">
+                <v-icon>mdi-close</v-icon>
+              </v-btn>
+            </v-toolbar>
+
+            <v-card-text>
+              <v-container>
+                <v-row>
+                  <v-col cols="12" class="text-center">
+                    <v-avatar size="80">
+                      <template v-if="user.Avatar">
+                        <v-img :src="user.Avatar" />
+                      </template>
+                      <template v-else>
+                        <span class="initials">{{ user.FirstName.charAt(0) }}{{ user.LastName.charAt(0) }}</span>
+                      </template>
+                    </v-avatar>
+                    <h3 class="mt-2">{{ user.FirstName }} {{ user.LastName }}</h3>
+                    <p class="subtitle-1">{{ user.Role }}</p>
+                  </v-col>
+                  <v-col cols="12">
+                    <p><strong>Email:</strong> {{ user.Email }}</p>
+                    <p><strong>Department:</strong> {{ user.Department }}</p>
+                    <p><strong>Date of Birth:</strong> {{ formatDate(user.DateOfBirth) }}</p>
+                    <p><strong>Joined:</strong> {{ formatDate(user.CreatedAt) }}</p>
+                  </v-col>
+                </v-row>
+              </v-container>
+            </v-card-text>
+
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="showProfileDialog = false">Close</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- Create, Edit, View User Modal -->
+        <v-dialog v-model="dialog" max-width="800px" persistent>
+          <v-card>
+            <v-toolbar color="#000000" dark flat>
+              <v-toolbar-title>
+                {{ dialogMode === 'edit' ? 'Edit User' : dialogMode === 'view' ? 'View User' : 'Create New User' }}
+              </v-toolbar-title>
+            </v-toolbar>
+
+            <v-divider class="my-2"></v-divider>
+
+            <v-card-text>
+              <v-expansion-panels multiple accordion>
+                <!-- Basic Info -->
+                <v-expansion-panel>
+                  <v-expansion-panel-header>Basic Information</v-expansion-panel-header>
+                  <v-expansion-panel-content>
+                    <v-container>
+                      <v-row dense>
+                        <v-col cols="6">
+                          <v-text-field label="First Name" v-model="newUser.FirstName"
                             :readonly="dialogMode === 'view'" />
-                        </v-menu>
-                      </v-col>
-                      <v-col cols="6">
-                        <v-text-field label="Mobile Number" v-model="newUser.MobileNumber"
-                          :readonly="dialogMode === 'view'" />
-                      </v-col>
-                    </v-row>
-                  </v-container>
-                </v-expansion-panel-content>
-              </v-expansion-panel>
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field label="Last Name" v-model="newUser.LastName"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                        <v-col cols="12">
+                          <v-text-field label="Email" v-model="newUser.Email" :readonly="dialogMode === 'view'" />
+                        </v-col>
+                        <v-col cols="6">
+                          <v-menu ref="dobMenu" v-model="dobMenu" :close-on-content-click="false"
+                            transition="scale-transition" offset-y min-width="290px">
+                            <template v-slot:activator="{ on, attrs }">
+                              <v-text-field v-model="newUser.DateOfBirth" label="Date of Birth"
+                                prepend-icon="mdi-calendar" readonly v-bind="attrs" v-on="on" />
+                            </template>
+                            <v-date-picker v-model="newUser.DateOfBirth" @input="dobMenu = false"
+                              :readonly="dialogMode === 'view'" />
+                          </v-menu>
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field label="Mobile Number" v-model="newUser.MobileNumber"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </v-expansion-panel-content>
+                </v-expansion-panel>
 
-              <!-- Job Details -->
-              <v-expansion-panel>
-                <v-expansion-panel-header>Job Details</v-expansion-panel-header>
-                <v-expansion-panel-content>
-                  <v-container>
-                    <v-row dense>
-                      <v-col cols="6">
-                        <v-select :items="roles" label="Role" v-model="newUser.Role"
-                          :disabled="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="6">
-                        <v-select :items="departments" label="Department" v-model="newUser.Department"
-                          :disabled="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="6">
-                        <v-text-field label="Hourly Rate (£)" v-model="newUser.HourlyRate" type="number"
-                          :readonly="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="6">
-                        <v-text-field label="Holiday Entitlement (hrs)" v-model="newUser.HolidayEntitlementAccruedHours"
-                          type="number" :readonly="dialogMode === 'view'" />
-                      </v-col>
-                    </v-row>
-                  </v-container>
-                </v-expansion-panel-content>
-              </v-expansion-panel>
+                <!-- Job Details -->
+                <v-expansion-panel>
+                  <v-expansion-panel-header>Job Details</v-expansion-panel-header>
+                  <v-expansion-panel-content>
+                    <v-container>
+                      <v-row dense>
+                        <v-col cols="6">
+                          <v-select :items="roles" label="Role" v-model="newUser.Role"
+                            :disabled="dialogMode === 'view'" />
+                        </v-col>
+                        <v-col cols="6">
+                          <v-select :items="departments" label="Department" v-model="newUser.Department"
+                            :disabled="dialogMode === 'view'" />
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field label="Hourly Rate (£)" v-model="newUser.HourlyRate" type="number"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field label="Holiday Entitlement (hrs)"
+                            v-model="newUser.HolidayEntitlementAccruedHours" type="number"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </v-expansion-panel-content>
+                </v-expansion-panel>
 
-              <!-- Emergency Contact -->
-              <v-expansion-panel>
-                <v-expansion-panel-header>Emergency Contact</v-expansion-panel-header>
-                <v-expansion-panel-content>
-                  <v-container>
-                    <v-row dense>
-                      <v-col cols="6">
-                        <v-text-field label="Contact Name" v-model="newUser.EmergencyContactName"
-                          :readonly="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="6">
-                        <v-text-field label="Contact Phone" v-model="newUser.EmergencyContactPhone"
-                          :readonly="dialogMode === 'view'" />
-                      </v-col>
-                    </v-row>
-                  </v-container>
-                </v-expansion-panel-content>
-              </v-expansion-panel>
+                <!-- Emergency Contact -->
+                <v-expansion-panel>
+                  <v-expansion-panel-header>Emergency Contact</v-expansion-panel-header>
+                  <v-expansion-panel-content>
+                    <v-container>
+                      <v-row dense>
+                        <v-col cols="6">
+                          <v-text-field label="Contact Name" v-model="newUser.EmergencyContactName"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field label="Contact Phone" v-model="newUser.EmergencyContactPhone"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </v-expansion-panel-content>
+                </v-expansion-panel>
 
-              <!-- Medical Info -->
-              <v-expansion-panel>
-                <v-expansion-panel-header>Medical Information</v-expansion-panel-header>
-                <v-expansion-panel-content>
-                  <v-container>
-                    <v-row dense>
-                      <v-col cols="6">
-                        <v-text-field label="Health Conditions" v-model="newUser.HealthConditions"
-                          :readonly="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="6">
-                        <v-text-field label="Medication" v-model="newUser.Medication"
-                          :readonly="dialogMode === 'view'" />
-                      </v-col>
-                    </v-row>
-                  </v-container>
-                </v-expansion-panel-content>
-              </v-expansion-panel>
+                <!-- Medical Info -->
+                <v-expansion-panel>
+                  <v-expansion-panel-header>Medical Information</v-expansion-panel-header>
+                  <v-expansion-panel-content>
+                    <v-container>
+                      <v-row dense>
+                        <v-col cols="6">
+                          <v-text-field label="Health Conditions" v-model="newUser.HealthConditions"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field label="Medication" v-model="newUser.Medication"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </v-expansion-panel-content>
+                </v-expansion-panel>
 
-              <!-- Compliance & Qualifications -->
-              <v-expansion-panel>
-                <v-expansion-panel-header>Compliance & Qualifications</v-expansion-panel-header>
-                <v-expansion-panel-content>
-                  <v-container>
-                    <v-row dense>
-                      <v-col cols="6">
-                        <v-switch label="Bank Details Confirmed" v-model="newUser.BankDetailsConfirmation"
-                          :disabled="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="6">
-                        <v-text-field label="DBS Details" v-model="newUser.DBSDetails"
-                          :readonly="dialogMode === 'view'" />
-                      </v-col>
-                      <v-col cols="12">
-                        <v-text-field label="First Aid Qualifications" v-model="newUser.FirstAidQualifications"
-                          :readonly="dialogMode === 'view'" />
-                      </v-col>
-                    </v-row>
-                  </v-container>
-                </v-expansion-panel-content>
-              </v-expansion-panel>
+                <!-- Compliance & Qualifications -->
+                <v-expansion-panel>
+                  <v-expansion-panel-header>Compliance & Qualifications</v-expansion-panel-header>
+                  <v-expansion-panel-content>
+                    <v-container>
+                      <v-row dense>
+                        <v-col cols="6">
+                          <v-switch label="Bank Details Confirmed" v-model="newUser.BankDetailsConfirmation"
+                            :disabled="dialogMode === 'view'" />
+                        </v-col>
+                        <v-col cols="6">
+                          <v-text-field label="DBS Details" v-model="newUser.DBSDetails"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                        <v-col cols="12">
+                          <v-text-field label="First Aid Qualifications" v-model="newUser.FirstAidQualifications"
+                            :readonly="dialogMode === 'view'" />
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </v-expansion-panel-content>
+                </v-expansion-panel>
 
-              <!-- Avatar Selection -->
-              <v-expansion-panel>
-                <v-expansion-panel-header>Avatar</v-expansion-panel-header>
-                <v-expansion-panel-content>
-                  <v-container>
-                    <v-row dense>
-                      <v-col v-for="(avatar, index) in defaultAvatars" :key="index" cols="4"
-                        class="d-flex justify-center">
-                        <v-hover v-slot:default="{ hover }">
-                          <v-avatar size="80" :class="{
+                <!-- Avatar Selection -->
+                <v-expansion-panel>
+                  <v-expansion-panel-header>Avatar</v-expansion-panel-header>
+                  <v-expansion-panel-content>
+                    <v-container>
+                      <v-row dense>
+                        <v-col v-for="(avatar, index) in defaultAvatars" :key="index" cols="4"
+                          class="d-flex justify-center">
+                          <v-hover v-slot:default="{ hover }">
+                            <v-avatar size="80" :class="{
                         'elevation-6': newUser.Avatar === avatar.url,
                         'elevation-2': newUser.Avatar !== avatar.url
                       }" class="cursor-pointer" style="border: 2px solid transparent"
-                            @click="dialogMode !== 'view' && (newUser.Avatar = avatar.url)">
-                            <v-img :src="avatar.url" :alt="avatar.name" contain referrerpolicy="no-referrer" />
-                          </v-avatar>
-                        </v-hover>
-                      </v-col>
-                    </v-row>
+                              @click="dialogMode !== 'view' && (newUser.Avatar = avatar.url)">
+                              <v-img :src="avatar.url" :alt="avatar.name" contain referrerpolicy="no-referrer" />
+                            </v-avatar>
+                          </v-hover>
+                        </v-col>
+                      </v-row>
 
-                    <v-row class="mt-2">
-                      <v-col cols="12">
-                        <div v-if="newUser.Avatar">
-                          <p class="subtitle-2 text-center mt-2">Selected:</p>
-                          <v-avatar size="80" class="mx-auto">
-                            <v-img :src="newUser.Avatar" referrerpolicy="no-referrer" />
-                          </v-avatar>
-                        </div>
-                      </v-col>
-                    </v-row>
-                  </v-container>
-                </v-expansion-panel-content>
-              </v-expansion-panel>
+                      <v-row class="mt-2">
+                        <v-col cols="12">
+                          <div v-if="newUser.Avatar">
+                            <p class="subtitle-2 text-center mt-2">Selected:</p>
+                            <v-avatar size="80" class="mx-auto">
+                              <v-img :src="newUser.Avatar" referrerpolicy="no-referrer" />
+                            </v-avatar>
+                          </div>
+                        </v-col>
+                      </v-row>
+                    </v-container>
+                  </v-expansion-panel-content>
+                </v-expansion-panel>
 
-            </v-expansion-panels>
-          </v-card-text>
+              </v-expansion-panels>
+            </v-card-text>
 
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn text @click="dialog = false">Close</v-btn>
-            <v-btn color="primary" @click="createUser" v-if="dialogMode !== 'view'">Save</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="dialog = false">Close</v-btn>
+              <v-btn color="primary" @click="createUser" v-if="dialogMode !== 'view'">Save</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
 
-      <!-- Complete Shift Modal -->
-      <v-dialog v-model="completeDialog" max-width="500px" persistent>
-        <v-card>
-          <!-- Toolbar -->
-          <v-toolbar color="#000000" dark flat>
-            <v-toolbar-title>Complete Shift</v-toolbar-title>
-            <v-spacer></v-spacer>
-            <v-btn icon @click="completeDialog = false">
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
-          </v-toolbar>
+        <!-- ✅ Create Shift Modal -->
+        <v-dialog v-model="createShiftDialog" max-width="600px" persistent>
+          <v-card>
+            <v-card-title>Create Shift</v-card-title>
+            <v-divider></v-divider>
+            <v-card-text>
+              <v-container>
+                <v-row dense>
+                  <v-col cols="12" sm="6">
+                    <v-text-field label="Shift Date" v-model="newShift.ShiftDate" type="date" required />
+                  </v-col>
 
-          <v-divider class="my-2"></v-divider>
+                  <v-col cols="6" sm="3">
+                    <v-text-field label="Start Time" v-model="newShift.StartTime" type="time" required />
+                  </v-col>
 
-          <!-- Shift Form Content -->
-          <v-card-text>
-            <v-container>
-              <v-row dense>
-                <v-col cols="12">
-                  <v-text-field label="Actual Hours Worked" v-model="actualHours" type="number" min="0" step="0.25"
-                    append-icon="mdi-clock-outline" />
-                </v-col>
-              </v-row>
-            </v-container>
-          </v-card-text>
+                  <v-col cols="6" sm="3">
+                    <v-text-field label="End Time" v-model="newShift.EndTime" type="time" required />
+                  </v-col>
 
-          <!-- Actions -->
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn text @click="completeDialog = false">Cancel</v-btn>
-            <v-btn color="primary" @click="submitCompletion">Submit</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+                  <v-col cols="12">
+                    <v-select label="Shift Type" :items="shiftTypes" v-model="newShift.ShiftType" dense outlined
+                      required />
+                  </v-col>
 
-      <!-- 🔍 View Invoice Modal -->
-      <v-dialog v-model="viewInvoiceDialog" max-width="700px">
-        <v-card>
-          <v-toolbar color="#000000" dark flat>
-            <v-toolbar-title>Invoice Details</v-toolbar-title>
-            <v-spacer></v-spacer>
-            <v-btn icon @click="viewInvoiceDialog = false">
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
-          </v-toolbar>
+                  <v-col cols="12">
+                    <v-textarea label="Description" v-model="newShift.Description" rows="3" auto-grow outlined />
+                  </v-col>
 
-          <v-card-text>
-            <v-container>
-              <v-row dense>
-                <v-col cols="6">
-                  <p><strong>Date:</strong> {{ selectedInvoice.InvoiceDate }}</p>
-                  <p><strong>Type:</strong> {{ selectedInvoice.InvoiceType }}</p>
-                  <p><strong>Status:</strong>
-                    <v-chip :color="statusColor(selectedInvoice.Status)" dark small>
-                      {{ selectedInvoice.Status }}
+                  <v-col cols="12">
+                    <v-select label="Assign to Employees" v-model="newShift.SelectedEmployees"
+                      :items="availableEmployees" item-text="FullName" item-value="UserID" multiple chips clearable
+                      outlined required />
+                  </v-col>
+                </v-row>
+              </v-container>
+            </v-card-text>
+
+            <v-divider></v-divider>
+
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="createShiftDialog = false">Cancel</v-btn>
+              <v-btn color="primary" @click="submitNewShift">Create</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- Shift Action Wizard Modal -->
+        <v-dialog v-model="shiftActionDialog" max-width="500px" persistent>
+          <v-card>
+            <v-toolbar color="#000000" dark flat>
+              <v-toolbar-title>Shift Action</v-toolbar-title>
+              <v-spacer></v-spacer>
+              <v-btn icon @click="shiftActionDialog = false">
+                <v-icon>mdi-close</v-icon>
+              </v-btn>
+            </v-toolbar>
+
+            <v-divider></v-divider>
+
+            <v-card-text>
+              <!-- Step 1: Choose Action -->
+              <div v-if="shiftActionStep === 1">
+                <p>What would you like to do with this shift?</p>
+                <v-btn color="primary" class="mr-3" @click="chooseAction('complete')">Complete</v-btn>
+                <v-btn color="red" @click="chooseAction('decline')">Decline</v-btn>
+              </div>
+
+              <!-- Step 2a: Completion Form -->
+              <div v-else-if="shiftActionStep === 2 && shiftActionType === 'complete'">
+                <p>Mark shift as <strong>Completed</strong>. Please enter actual hours worked:</p>
+                <v-text-field v-model="actualHours" label="Actual Hours Worked" type="number" min="0" step="0.25"
+                  append-icon="mdi-clock-outline" />
+              </div>
+
+              <!-- Step 2b: Decline Form -->
+              <div v-else-if="shiftActionStep === 2 && shiftActionType === 'decline'">
+                <p class="red--text">You are declining this shift. Please contact your manager directly as well.</p>
+                <v-textarea label="Reason for Declining" v-model="declineReason" rows="3" auto-grow required />
+              </div>
+            </v-card-text>
+
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="shiftActionDialog = false">Cancel</v-btn>
+              <v-btn v-if="shiftActionStep === 2" :color="shiftActionType === 'complete' ? 'primary' : 'red'"
+                @click="submitShiftAction">
+                Submit
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- 🔍 View Invoice Modal -->
+        <v-dialog v-model="viewInvoiceDialog" max-width="700px">
+          <v-card>
+            <v-toolbar color="#000000" dark flat>
+              <v-toolbar-title>Invoice Details</v-toolbar-title>
+              <v-spacer></v-spacer>
+              <v-btn icon @click="viewInvoiceDialog = false">
+                <v-icon>mdi-close</v-icon>
+              </v-btn>
+            </v-toolbar>
+
+            <v-card-text>
+              <v-container>
+                <v-row dense>
+                  <v-col cols="6">
+                    <p><strong>Date:</strong> {{ selectedInvoice.InvoiceDate }}</p>
+                    <p><strong>Type:</strong> {{ selectedInvoice.InvoiceType }}</p>
+                    <p><strong>Status:</strong>
+                      <v-chip :color="statusColor(selectedInvoice.Status)" dark small>
+                        {{ selectedInvoice.Status }}
+                      </v-chip>
+                    </p>
+                  </v-col>
+                  <v-col cols="6">
+                    <p><strong>Total Amount:</strong> £{{ selectedInvoice.TotalAmount }}</p>
+                    <p><strong>Description:</strong></p>
+                    <p>{{ selectedInvoice.DescriptionOrPurpose }}</p>
+                  </v-col>
+                </v-row>
+
+                <v-divider class="my-3"></v-divider>
+
+                <v-row>
+                  <v-col cols="12">
+                    <p class="subtitle-2 font-weight-bold">Related Shift IDs:</p>
+                    <v-chip v-for="id in splitShiftIds(selectedInvoice.RelatedShiftIDs)" :key="id" class="ma-1" small
+                      color="primary" dark>
+                      {{ id }}
                     </v-chip>
-                  </p>
-                </v-col>
-                <v-col cols="6">
-                  <p><strong>Total Amount:</strong> £{{ selectedInvoice.TotalAmount }}</p>
-                  <p><strong>Description:</strong></p>
-                  <p>{{ selectedInvoice.DescriptionOrPurpose }}</p>
-                </v-col>
-              </v-row>
+                  </v-col>
+                </v-row>
+              </v-container>
+            </v-card-text>
 
-              <v-divider class="my-3"></v-divider>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="viewInvoiceDialog = false">Close</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
 
-              <v-row>
-                <v-col cols="12">
-                  <p class="subtitle-2 font-weight-bold">Related Shift IDs:</p>
-                  <v-chip v-for="id in splitShiftIds(selectedInvoice.RelatedShiftIDs)" :key="id" class="ma-1" small
-                    color="primary" dark>
-                    {{ id }}
-                  </v-chip>
-                </v-col>
-              </v-row>
-            </v-container>
-          </v-card-text>
+        <!-- 🧾 Create Manual Invoice Modal -->
+        <v-dialog v-model="createInvoiceDialog" max-width="600px" persistent>
+          <v-card>
+            <v-toolbar color="#000000" dark flat>
+              <v-toolbar-title>Create Manual Invoice</v-toolbar-title>
+              <v-spacer></v-spacer>
+              <v-btn icon @click="createInvoiceDialog = false">
+                <v-icon>mdi-close</v-icon>
+              </v-btn>
+            </v-toolbar>
 
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn text @click="viewInvoiceDialog = false">Close</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+            <v-card-text>
+              <v-container>
+                <v-row dense>
+                  <v-col cols="12" sm="6">
+                    <v-select v-model="newInvoice.InvoiceType" :items="manualInvoiceTypes" label="Invoice Type"
+                      :rules="[v => !!v || 'Required']" required />
+                  </v-col>
+                  <v-col cols="12" sm="6">
+                    <v-menu ref="invoiceDateMenu" v-model="invoiceDateMenu" :close-on-content-click="false"
+                      transition="scale-transition" offset-y min-width="auto">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-text-field v-model="newInvoice.InvoiceDate" label="Invoice Date" readonly v-bind="attrs"
+                          v-on="on" prepend-icon="mdi-calendar" />
+                      </template>
+                      <v-date-picker v-model="newInvoice.InvoiceDate" @input="invoiceDateMenu = false" />
+                    </v-menu>
+                  </v-col>
 
-      <!-- 🧾 Create Manual Invoice Modal -->
-      <v-dialog v-model="createInvoiceDialog" max-width="600px" persistent>
-        <v-card>
-          <v-toolbar color="#000000" dark flat>
-            <v-toolbar-title>Create Manual Invoice</v-toolbar-title>
-            <v-spacer></v-spacer>
-            <v-btn icon @click="createInvoiceDialog = false">
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
-          </v-toolbar>
+                  <v-col cols="12">
+                    <v-text-field v-model="newInvoice.TotalAmount" label="Total Amount (£)" type="number" min="0"
+                      step="0.01" />
+                  </v-col>
 
-          <v-card-text>
-            <v-container>
-              <v-row dense>
-                <v-col cols="12" sm="6">
-                  <v-select v-model="newInvoice.InvoiceType" :items="manualInvoiceTypes" label="Invoice Type"
-                    :rules="[v => !!v || 'Required']" required />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-menu ref="invoiceDateMenu" v-model="invoiceDateMenu" :close-on-content-click="false"
-                    transition="scale-transition" offset-y min-width="auto">
-                    <template v-slot:activator="{ on, attrs }">
-                      <v-text-field v-model="newInvoice.InvoiceDate" label="Invoice Date" readonly v-bind="attrs"
-                        v-on="on" prepend-icon="mdi-calendar" />
-                    </template>
-                    <v-date-picker v-model="newInvoice.InvoiceDate" @input="invoiceDateMenu = false" />
-                  </v-menu>
-                </v-col>
+                  <v-col cols="12">
+                    <v-textarea v-model="newInvoice.DescriptionOrPurpose" label="Description or Purpose" rows="3"
+                      auto-grow />
+                  </v-col>
 
-                <v-col cols="12">
-                  <v-text-field v-model="newInvoice.TotalAmount" label="Total Amount (£)" type="number" min="0"
-                    step="0.01" />
-                </v-col>
-
-                <v-col cols="12">
-                  <v-textarea v-model="newInvoice.DescriptionOrPurpose" label="Description or Purpose" rows="3"
-                    auto-grow />
-                </v-col>
-
-                <!-- For future: file upload -->
-                <!--
+                  <!-- For future: file upload -->
+                  <!--
                 <v-col cols="12">
                   <v-file-input
                     v-model="newInvoice.ReceiptFile"
@@ -631,169 +799,143 @@
                   />
                 </v-col>
                 -->
-              </v-row>
-            </v-container>
-          </v-card-text>
+                </v-row>
+              </v-container>
+            </v-card-text>
 
-          <!-- 🔍 Invoice Preview Dialog -->
-          <v-dialog v-model="previewInvoiceDialog" max-width="700px" persistent>
-            <v-card>
-              <v-toolbar flat color="#000000" dark>
-                <v-toolbar-title>Invoice Preview</v-toolbar-title>
-                <v-spacer></v-spacer>
-                <v-btn icon @click="previewInvoiceDialog = false">
-                  <v-icon>mdi-close</v-icon>
-                </v-btn>
-              </v-toolbar>
+            <!-- 🔍 Invoice Preview Dialog -->
+            <v-dialog v-model="previewInvoiceDialog" max-width="700px" persistent>
+              <v-card>
+                <v-toolbar flat color="#000000" dark>
+                  <v-toolbar-title>Invoice Preview</v-toolbar-title>
+                  <v-spacer></v-spacer>
+                  <v-btn icon @click="previewInvoiceDialog = false">
+                    <v-icon>mdi-close</v-icon>
+                  </v-btn>
+                </v-toolbar>
 
-              <v-divider class="my-2"></v-divider>
+                <v-divider class="my-2"></v-divider>
 
-              <v-card-text>
-                <v-container>
-                  <v-row>
-                    <v-col cols="6">
-                      <p><strong>Invoice ID:</strong> {{ previewInvoice.InvoiceID }}</p>
-                      <p><strong>Status:</strong> {{ previewInvoice.Status }}</p>
-                      <p><strong>Date:</strong> {{ formatDate(previewInvoice.InvoiceDate) }}</p>
-                    </v-col>
-                    <v-col cols="6">
-                      <p><strong>Total:</strong> £{{ Number(previewInvoice.TotalAmount).toFixed(2) }}</p>
-                      <p><strong>Type:</strong> {{ previewInvoice.InvoiceType }}</p>
-                    </v-col>
-                  </v-row>
+                <v-card-text>
+                  <v-container>
+                    <v-row>
+                      <v-col cols="6">
+                        <p><strong>Invoice ID:</strong> {{ previewInvoice.InvoiceID }}</p>
+                        <p><strong>Status:</strong> {{ previewInvoice.Status }}</p>
+                        <p><strong>Date:</strong> {{ formatDate(previewInvoice.InvoiceDate) }}</p>
+                      </v-col>
+                      <v-col cols="6">
+                        <p><strong>Total:</strong> £{{ Number(previewInvoice.TotalAmount).toFixed(2) }}</p>
+                        <p><strong>Type:</strong> {{ previewInvoice.InvoiceType }}</p>
+                      </v-col>
+                    </v-row>
 
-                  <v-divider class="my-3"></v-divider>
+                    <v-divider class="my-3"></v-divider>
 
-                  <v-data-table
-                    :headers="[
+                    <v-data-table :headers="[
                       { text: 'Description', value: 'Description' },
                       { text: 'Qty', value: 'Quantity' },
                       { text: 'Unit Price', value: 'UnitPrice' },
                       { text: 'Line Total', value: 'LineTotal' }
-                    ]"
-                    :items="previewInvoiceItems"
-                    dense
-                    hide-default-footer
-                  >
-                    <template v-slot:item.UnitPrice="{ item }">
-                      £{{ Number(item.UnitPrice).toFixed(2) }}
-                    </template>
-                    <template v-slot:item.LineTotal="{ item }">
-                      £{{ Number(item.LineTotal).toFixed(2) }}
-                    </template>
-                  </v-data-table>
-                </v-container>
-              </v-card-text>
+                    ]" :items="previewInvoiceItems" dense hide-default-footer>
+                      <template v-slot:item.UnitPrice="{ item }">
+                        £{{ Number(item.UnitPrice).toFixed(2) }}
+                      </template>
+                      <template v-slot:item.LineTotal="{ item }">
+                        £{{ Number(item.LineTotal).toFixed(2) }}
+                      </template>
+                    </v-data-table>
+                  </v-container>
+                </v-card-text>
 
-              <v-card-actions>
-                <v-spacer></v-spacer>
-                <v-btn text @click="previewInvoiceDialog = false">Close</v-btn>
-              </v-card-actions>
-            </v-card>
-          </v-dialog>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn text @click="previewInvoiceDialog = false">Close</v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
 
-          <!-- 🧾 Department Invoices -->
-          <v-container v-if="view === 'departmentinvoices'" fluid>
-            <v-row>
-              <v-col cols="12">
-                <v-card class="pa-4" elevation="3">
-                  <v-card-title>
-                    Department Invoices
-                    <v-spacer></v-spacer>
-                    <v-btn small icon @click="fetchDepartmentInvoices">
-                      <v-icon>mdi-refresh</v-icon>
-                    </v-btn>
-                  </v-card-title>
-
-                  <v-divider class="my-2"></v-divider>
-
-                  <v-data-table
-                    :headers="invoiceTableHeadersManager"
-                    :items="departmentInvoices"
-                    item-key="InvoiceID"
-                    dense
-                    hide-default-footer
-                  >
-                    <template v-slot:item.actions="{ item }">
-                      <v-btn icon small @click="approveInvoice(item)">
-                        <v-icon color="green">mdi-check</v-icon>
-                      </v-btn>
-                      <v-btn icon small @click="rejectInvoice(item)">
-                        <v-icon color="red">mdi-close</v-icon>
-                      </v-btn>
-                    </template>
-
-                    <template v-slot:no-data>
-                      <v-alert type="info">No invoices pending approval.</v-alert>
-                    </template>
-                  </v-data-table>
-                </v-card>
-              </v-col>
-            </v-row>
-          </v-container>
-
-      <!-- 🧾 Create New Invoice Modal -->
-      <v-dialog v-model="newInvoiceDialog" max-width="600px">
-        <v-card>
-          <v-card-title>
-            <span class="text-h6">New Manual Invoice</span>
-          </v-card-title>
-          <v-card-text>
-            <v-container>
+            <!-- 🧾 Department Invoices -->
+            <v-container v-if="view === 'departmentinvoices'" fluid>
               <v-row>
                 <v-col cols="12">
-                  <v-select
-                    :items="['CPD', 'Expense', 'Course']"
-                    label="Invoice Type"
-                    v-model="manualInvoice.InvoiceType"
-                    required
-                  />
-                </v-col>
-                <v-col cols="12">
-                  <v-text-field
-                    label="Description / Purpose"
-                    v-model="manualInvoice.DescriptionOrPurpose"
-                    required
-                  />
-                </v-col>
-                <v-col cols="12">
-                  <v-text-field
-                    label="Amount (£)"
-                    type="number"
-                    v-model="manualInvoice.TotalAmount"
-                    required
-                  />
-                </v-col>
-                <v-col cols="12">
-                  <v-file-input
-                    v-model="manualInvoice.file"
-                    label="Upload Receipt (optional)"
-                    accept="image/*,application/pdf"
-                    prepend-icon="mdi-paperclip"
-                  />
+                  <v-card class="pa-4" elevation="3">
+                    <v-card-title>
+                      Department Invoices
+                      <v-spacer></v-spacer>
+                      <v-btn small icon @click="fetchDepartmentInvoices">
+                        <v-icon>mdi-refresh</v-icon>
+                      </v-btn>
+                    </v-card-title>
+
+                    <v-divider class="my-2"></v-divider>
+
+                    <v-data-table :headers="invoiceTableHeadersManager" :items="departmentInvoices" item-key="InvoiceID"
+                      dense hide-default-footer>
+                      <template v-slot:item.actions="{ item }">
+                        <v-btn icon small @click="approveInvoice(item)">
+                          <v-icon color="green">mdi-check</v-icon>
+                        </v-btn>
+                        <v-btn icon small @click="rejectInvoice(item)">
+                          <v-icon color="red">mdi-close</v-icon>
+                        </v-btn>
+                      </template>
+
+                      <template v-slot:no-data>
+                        <v-alert type="info">No invoices pending approval.</v-alert>
+                      </template>
+                    </v-data-table>
+                  </v-card>
                 </v-col>
               </v-row>
             </v-container>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn text @click="newInvoiceDialog = false">Cancel</v-btn>
-            <v-btn color="primary" @click="saveManualInvoice">Save Draft</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
 
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn text @click="createInvoiceDialog = false">Cancel</v-btn>
-            <v-btn color="primary" @click="submitManualInvoice">Submit</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+            <!-- 🧾 Create New Invoice Modal -->
+            <v-dialog v-model="newInvoiceDialog" max-width="600px">
+              <v-card>
+                <v-card-title>
+                  <span class="text-h6">New Manual Invoice</span>
+                </v-card-title>
+                <v-card-text>
+                  <v-container>
+                    <v-row>
+                      <v-col cols="12">
+                        <v-select :items="['CPD', 'Expense', 'Course']" label="Invoice Type"
+                          v-model="manualInvoice.InvoiceType" required />
+                      </v-col>
+                      <v-col cols="12">
+                        <v-text-field label="Description / Purpose" v-model="manualInvoice.DescriptionOrPurpose"
+                          required />
+                      </v-col>
+                      <v-col cols="12">
+                        <v-text-field label="Amount (£)" type="number" v-model="manualInvoice.TotalAmount" required />
+                      </v-col>
+                      <v-col cols="12">
+                        <v-file-input v-model="manualInvoice.file" label="Upload Receipt (optional)"
+                          accept="image/*,application/pdf" prepend-icon="mdi-paperclip" />
+                      </v-col>
+                    </v-row>
+                  </v-container>
+                </v-card-text>
+                <v-card-actions>
+                  <v-spacer></v-spacer>
+                  <v-btn text @click="newInvoiceDialog = false">Cancel</v-btn>
+                  <v-btn color="primary" @click="saveManualInvoice">Save Draft</v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
 
-      <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" top right>
-        {{ snackbar.message }}
-      </v-snackbar>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="createInvoiceDialog = false">Cancel</v-btn>
+              <v-btn color="primary" @click="submitManualInvoice">Submit</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" top right>
+          {{ snackbar.message }}
+        </v-snackbar>
     </v-app>
   </div>
 
@@ -802,6 +944,7 @@
       el: '#app',
       vuetify: new Vuetify(),
       data: () => ({
+        // 🔐 Session & Auth
         user: {
           FirstName: '',
           LastName: '',
@@ -810,20 +953,28 @@
           Department: '',
           Avatar: ''
         },
+        sessionInitialized: false,
+        authTried: false,
+
+        // 🧭 UI Layout
         drawer: true,
         mini: true,
         view: 'dashboard',
-        menuItems: [],
-        users: [],
-        showProfileDialog: false,
-        dialogMode: 'create',
-        dialog: false,
-        dobMenu: false,
         snackbar: {
           show: false,
           message: '',
           color: 'success'
         },
+
+        // 📋 Navigation & Dialogs
+        menuItems: [],
+        showProfileDialog: false,
+        dialog: false,
+        dialogMode: 'create',
+        dobMenu: false,
+
+        // 👥 Users
+        users: [],
         newUser: {
           FirstName: '',
           LastName: '',
@@ -844,61 +995,6 @@
           AccountStatus: 'Active',
           Avatar: ''
         },
-        offeredShifts: [],
-        assignedShifts: [],
-        completeDialog: false,
-        selectedShift: null,
-        actualHours: null,
-        shiftTableHeaders: [
-          { text: 'Date', value: 'ShiftDate' },
-          { text: 'Start', value: 'StartTime' },
-          { text: 'End', value: 'EndTime' },
-          { text: 'Department', value: 'Department' },
-          { text: 'Actions', value: 'actions', sortable: false }
-        ],
-        shiftTableHeadersAssigned: [
-          { text: 'Date', value: 'ShiftDate' },
-          { text: 'Start', value: 'StartTime' },
-          { text: 'End', value: 'EndTime' },
-          { text: 'Status', value: 'Status' },
-          { text: 'Actual Hours', value: 'ActualHoursWorked' },
-          { text: 'Actions', value: 'actions', sortable: false }
-        ],
-        myInvoices: [],
-        previewInvoiceDialog: false,
-        previewInvoice: {},
-        previewInvoiceItems: [],
-        viewInvoiceDialog: false,
-        selectedInvoice: {},
-        isEditing: false,
-        createInvoiceDialog: false,
-        invoiceDateMenu: false,
-        manualInvoiceTypes: ['CPD', 'Expense', 'Course'],
-        newInvoice: {
-          InvoiceType: '',
-          InvoiceDate: '',
-          TotalAmount: '',
-          DescriptionOrPurpose: '',
-          ReceiptFile: null,
-        },
-        invoiceTableHeaders: [
-          { text: 'Date', value: 'InvoiceDate' },
-          { text: 'Type', value: 'InvoiceType' },
-          { text: 'Amount (£)', value: 'TotalAmount' },
-          { text: 'Status', value: 'Status' },
-          { text: 'Purpose', value: 'DescriptionOrPurpose' },
-          { text: 'Actions', value: 'actions', sortable: false }
-        ],
-        newInvoiceDialog: false,
-        departmentInvoices: [],
-        invoiceTableHeadersManager: [
-          { text: 'Date', value: 'InvoiceDate' },
-          { text: 'Type', value: 'InvoiceType' },
-          { text: 'Employee', value: 'EmployeeName' },
-          { text: 'Amount', value: 'TotalAmount' },
-          { text: 'Status', value: 'Status' },
-          { text: 'Actions', value: 'actions', sortable: false }
-        ],
         roles: ['Administrator', 'Manager', 'Employee', 'CFO'],
         departments: ['SIC', 'Performance', 'Operations', 'Creative', 'B2AFC'],
         defaultAvatars: [
@@ -920,9 +1016,162 @@
           { name: 'Avatar 16', url: "https://i.imgur.com/BCgc4bR.png" },
           { name: 'Avatar 17', url: "https://i.imgur.com/V4nuXxZ.png" },
           { name: 'Avatar 18', url: "https://i.imgur.com/5VseQPv.png" }
+        ],
+
+        // 🕑 Shift Management
+        teamShifts: [],
+        offeredShifts: [],
+        assignedShifts: [],
+        availableEmployees: [],
+        shiftTypes: [
+          "Adults S&C (Mixed)", "Ballerz Technical Session", "Boxing S&C", "Girls. FTBL COE",
+          "Inital Assessment", "MSK (Clinic)", "MSK (SGR)", "Niggle Clinic",
+          "SG S&C", "Soft Tissue", "YATS"
+        ],
+        newShift: {
+          ShiftDate: '',
+          StartTime: '',
+          EndTime: '',
+          ShiftType: '',
+          Description: '',
+          SelectedEmployees: []
+        },
+        createShiftDialog: false,
+
+        // ✅ Shift Action Modal (wizard style)
+        shiftActionDialog: false,
+        shiftActionStep: 1,
+        shiftActionType: '', // 'decline' or 'complete'
+        selectedShift: null,
+        declineReason: '',
+        actualHours: '',
+
+        // 🧾 My Invoices
+        myInvoices: [],
+        previewInvoiceDialog: false,
+        previewInvoice: {},
+        previewInvoiceItems: [],
+        viewInvoiceDialog: false,
+        selectedInvoice: {},
+        createInvoiceDialog: false,
+        newInvoiceDialog: false,
+        invoiceDateMenu: false,
+        manualInvoiceTypes: ['CPD', 'Expense', 'Course'],
+        newInvoice: {
+          InvoiceType: '',
+          InvoiceDate: '',
+          TotalAmount: '',
+          DescriptionOrPurpose: '',
+          ReceiptFile: null
+        },
+        manualInvoice: {
+          InvoiceType: '',
+          DescriptionOrPurpose: '',
+          TotalAmount: '',
+          ExpenseReceiptFileID: '',
+          Status: 'Draft'
+        },
+        departmentInvoices: [],
+
+        // 📋 Table Headers
+        shiftTableHeaders: [
+          { text: 'Date', value: 'shift-date' },
+          { text: 'Type', value: 'shift-type' },
+          { text: 'Start', value: 'start-time' },
+          { text: 'End', value: 'end-time' },
+          { text: 'Department', value: 'department' },
+          { text: 'Status', value: 'status' },
+          { text: 'Assigned To', value: 'assigned-to' },
+          { text: 'Actions', value: 'actions', sortable: false }
+        ],
+        shiftTableHeadersAssigned: [
+          { text: 'Date', value: 'shift-date' },
+          { text: 'Type', value: 'shift-type' },
+          { text: 'Start', value: 'start-time' },
+          { text: 'End', value: 'end-time' },
+          { text: 'Status', value: 'status' },
+          { text: 'Actual Hours', value: 'actual-hours-worked' },
+          { text: 'Actions', value: 'actions', sortable: false }
+        ],
+        managerShiftTableHeaders: [
+          { text: 'Date', value: 'shift-date' },
+          { text: 'Type', value: 'shift-type' },
+          { text: 'Start', value: 'start-time' },
+          { text: 'End', value: 'end-time' },
+          { text: 'Department', value: 'department' },
+          { text: 'Status', value: 'status' },
+          { text: 'Assigned To', value: 'assigned-to' },
+          { text: 'Declined Reason', value: 'declined-reason' },
+          { text: 'Actions', value: 'actions', sortable: false }
+        ],
+        invoiceTableHeaders: [
+          { text: 'Date', value: 'invoice-date' },
+          { text: 'Type', value: 'invoice-type' },
+          { text: 'Amount (£)', value: 'total-amount' },
+          { text: 'Status', value: 'status' },
+          { text: 'Purpose', value: 'description-or-purpose' },
+          { text: 'Actions', value: 'actions', sortable: false }
+        ],
+        invoiceTableHeadersManager: [
+          { text: 'Date', value: 'InvoiceDate' },
+          { text: 'Type', value: 'InvoiceType' },
+          { text: 'Employee', value: 'EmployeeName' },
+          { text: 'Amount', value: 'TotalAmount' },
+          { text: 'Status', value: 'Status' },
+          { text: 'Actions', value: 'actions', sortable: false }
         ]
       }),
       methods: {
+        tryForceAuth() {
+          google.script.run
+            .withSuccessHandler((email) => {
+              if (email) {
+                console.log("✅ Auto-auth success:", email);
+                this.sessionInitialized = true;
+                this.fetchUserSession(); // ← triggers what you had in created()
+              } else {
+                console.warn("🟡 No email returned (probably not authorized yet)");
+              }
+              this.authTried = true;
+            })
+            .withFailureHandler((err) => {
+              console.error("❌ Auth error", err.message);
+              this.authTried = true;
+            })
+            .forceUserAuth(); // your GAS function
+        },
+        startAppManually() {
+          google.script.run
+            .withSuccessHandler((email) => {
+              if (email) {
+                console.log("✅ Manual auth success:", email);
+                this.sessionInitialized = true;
+                this.fetchUserSession();
+              } else {
+                this.showSnackbar("⚠️ Still unauthorized", "warning");
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("❌ Auth failed: " + err.message, "error");
+            })
+            .forceUserAuth();
+        },
+        fetchUserSession() {
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res && res.success) {
+                this.user = res.data;
+                this.setupMenu();
+                this.fetchAllUsers();
+              } else {
+                this.showSnackbar(res?.error || 'User not found', 'error');
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar('⚠️ Script error: ' + err.message, 'error');
+            })
+            .getUserSession();
+        },
         setupMenu() {
           const role = this.user.Role;
           if (role === 'Administrator') {
@@ -954,9 +1203,29 @@
           }
         },
         navigate(item) {
-          this.view = item.text.toLowerCase().replace(/\s+/g, '');
-          if (this.view === 'users') this.fetchAllUsers();
-          else if (this.view === 'myinvoices') this.fetchMyInvoices();
+          const viewKey = item.text.toLowerCase().replace(/\s+/g, '');
+          this.view = viewKey;
+
+          switch (viewKey) {
+            case 'users':
+              this.fetchAllUsers();
+              break;
+            case 'myshifts':
+              this.loadMyShifts();
+              break;
+            case 'teamshifts':
+              this.fetchTeamShifts();
+              break;
+            case 'myinvoices':
+              this.fetchMyInvoices();
+              break;
+            case 'departmentinvoices':
+              this.fetchDepartmentInvoices();
+              break;
+            // add other routes as needed
+            default:
+              break;
+          }
         },
         fetchAllUsers() {
           const self = this;
@@ -1084,16 +1353,157 @@
             })
             .updateUser(updatedUser);
         },
+        openCreateShiftDialog() {
+          google.script.run
+            .withSuccessHandler((res) => {
+              this.availableEmployees = res;
+              this.newShift = {
+                ShiftDate: '',
+                StartTime: '',
+                EndTime: '',
+                ShiftType: '',
+                Description: '',
+                SelectedEmployees: []
+              };
+              this.createShiftDialog = true;
+            })
+            .withFailureHandler(err => {
+              this.showSnackbar("❌ Failed to load employees: " + err.message, "error");
+            })
+            .getEligibleEmployeesForShift(this.user.Department);
+        },
+        submitNewShift() {
+          const payload = {
+            ...this.newShift,
+            Department: this.user.Department
+          };
+
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res.success) {
+                this.showSnackbar("✅ Shift(s) created", "success");
+                this.createShiftDialog = false;
+                this.fetchTeamShifts();
+              } else {
+                this.showSnackbar("❌ " + res.error, "error");
+              }
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("❌ Failed to create shift: " + err.message, "error");
+            })
+            .createShiftForEmployees(payload);
+        },
+        openShiftActionDialog(shift) {
+          this.selectedShift = shift;
+          this.shiftActionStep = 1;
+          this.shiftActionType = '';
+          this.declineReason = '';
+          this.actualHours = '';
+          this.shiftActionDialog = true;
+        },
+
+        chooseAction(type) {
+          this.shiftActionType = type;
+          this.shiftActionStep = 2;
+        },
+
+        submitShiftAction() {
+          const shift = this.selectedShift;
+          if (!shift) return;
+
+          if (this.shiftActionType === 'complete') {
+            const hours = parseFloat(this.actualHours);
+            if (isNaN(hours)) {
+              this.showSnackbar("⚠️ Enter valid hours.", "warning");
+              return;
+            }
+
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.showSnackbar("✅ Shift marked complete", "success");
+                  this.shiftActionDialog = false;
+                  this.loadMyShifts();
+                } else {
+                  this.showSnackbar("❌ " + res.error, "error");
+                }
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("❌ " + err.message, "error");
+              })
+              .markShiftComplete(this.user.UserID, shift.ShiftID, hours);
+
+          } else if (this.shiftActionType === 'decline') {
+            if (!this.declineReason.trim()) {
+              this.showSnackbar("⚠️ Please enter a reason", "warning");
+              return;
+            }
+
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.showSnackbar("❌ Shift declined", "warning");
+                  this.shiftActionDialog = false;
+                  this.loadMyShifts();
+                } else {
+                  this.showSnackbar("❌ " + res.error, "error");
+                }
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("❌ " + err.message, "error");
+              })
+              .declineShift(shift.ShiftID, this.declineReason);
+          }
+        },
         loadMyShifts() {
           google.script.run
             .withSuccessHandler((res) => {
-              this.offeredShifts = res.available || [];
-              this.assignedShifts = res.assigned || [];
+              if (!res || typeof res !== 'object') {
+                console.warn("⚠️ Invalid response from getEmployeeShifts:", res);
+                this.showSnackbar("⚠️ Could not load shifts. Try again.", "warning");
+                return;
+              }
+
+              const formatShifts = (shifts) =>
+                shifts.map(shift => ({
+                  ...shift,
+                  'shift-id': shift.ShiftID || '',
+                  'shift-date': this.formatDate(shift.ShiftDate),
+                  'start-time': shift.StartTime,
+                  'end-time': shift.EndTime,
+                  'shift-type': shift.ShiftType,
+                  'department': shift.Department,
+                  'status': shift.Status,
+                  'assigned-to': shift.AssignedUserID || '',
+                  'assigned-full-name': shift.AssignedFullName || '',
+                  'actual-hours-worked': shift.ActualHoursWorked || '',
+                  'declined-reason': shift.DeclinedReason || '',
+                  'accepted-timestamp': this.formatDate(shift.AcceptedTimestamp),
+                  'completed-timestamp': this.formatDate(shift.CompletedTimestamp),
+                  'created-at': this.formatDate(shift.CreatedAt),
+                  'updated-at': this.formatDate(shift.UpdatedAt)
+                }));
+
+              const formattedAvailable = formatShifts(res.available || []);
+              const formattedAssigned = formatShifts(res.assigned || []);
+
+              // ✅ Assign correctly based on status
+              this.offeredShifts = formattedAvailable.filter(s =>
+                s.status === 'Offered' || s.status === 'Declined'
+              );
+
+              this.assignedShifts = formattedAssigned.filter(s =>
+                ['Accepted', 'Completed', 'Declined'].includes(s.status)
+              );
+
+              console.log("📦 Offered shifts:", this.offeredShifts);
+              console.log("📦 Assigned shifts:", this.assignedShifts);
             })
-            .withFailureHandler(err => {
+            .withFailureHandler((err) => {
+              console.error("❌ Failed to load shifts:", err.message);
               this.showSnackbar("❌ Failed to load shifts: " + err.message, "error");
             })
-            .getEmployeeShifts(); // We'll wrap this in Apps Script to return both lists
+            .getEmployeeShifts();
         },
         acceptShift(shift) {
           google.script.run
@@ -1151,6 +1561,34 @@
             })
             .getMyInvoices();
         },
+        fetchTeamShifts() {
+          google.script.run
+            .withSuccessHandler((res) => {
+              const formatShifts = (shifts) =>
+                shifts.map(shift => ({
+                  ...shift,
+                  'shift-id': shift.ShiftID,
+                  'shift-date': this.formatDate(shift.ShiftDate),
+                  'start-time': shift.StartTime,
+                  'end-time': shift.EndTime,
+                  'shift-type': shift.ShiftType,
+                  'department': shift.Department,
+                  'status': shift.Status,
+                  'assigned-to': shift.AssignedUserID || '',
+                  'assigned-full-name': shift.AssignedFullName || '',
+                  'actual-hours-worked': shift.ActualHoursWorked || '',
+                  'declined-reason': shift.DeclinedReason || '',
+                  'created-at': this.formatDate(shift.CreatedAt),
+                  'updated-at': this.formatDate(shift.UpdatedAt)
+                }));
+
+              this.teamShifts = Array.isArray(res) ? formatShifts(res) : [];
+            })
+            .withFailureHandler((err) => {
+              this.showSnackbar("❌ Failed to fetch team shifts: " + err.message, "error");
+            })
+            .getShiftsForManager();
+        },
         submitInvoice(invoiceId) {
           if (!invoiceId) return;
           if (!confirm("Submit this invoice for approval?")) return;
@@ -1169,6 +1607,32 @@
             })
             .submitInvoice(invoiceId);
         },
+        declineShift(shift) {
+          this.selectedShift = shift;
+          this.declineReason = '';
+          this.declineDialog = true;
+        },
+        confirmDeclineShift() {
+          if (!this.declineReason.trim()) {
+            this.showSnackbar("❗Please provide a reason", "warning");
+            return;
+          }
+
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res.success) {
+                this.showSnackbar("❌ Shift declined", "warning");
+                this.loadMyShifts();
+                this.declineDialog = false;
+              } else {
+                this.showSnackbar("⚠️ " + res.error, "error");
+              }
+            })
+            .withFailureHandler(err => {
+              this.showSnackbar("⚠️ Script error: " + err.message, "error");
+            })
+            .declineShift(this.selectedShift.ShiftID, this.declineReason);
+        },
         splitShiftIds(idsString) {
           if (!idsString) return [];
           return idsString.split(',').map(id => id.trim());
@@ -1181,6 +1645,26 @@
             case 'CFOApproved': return 'teal';
             case 'Paid': return 'purple';
             case 'Rejected': return 'red';
+            case 'Completed': return 'green';
+            case 'Offered': return 'amber';
+            case 'Declined': return 'red';
+            case 'Accepted': return 'blue';
+            default: return 'grey';
+          }
+        },
+        actionIcon(status) {
+          switch (status) {
+            case 'Offered': return 'mdi-help-circle';
+            case 'Accepted': return 'mdi-thumb-up';
+            case 'Completed': return 'mdi-check-circle';
+            default: return 'mdi-alert';
+          }
+        },
+        actionIconColor(status) {
+          switch (status) {
+            case 'Offered': return 'orange';
+            case 'Accepted': return 'blue';
+            case 'Completed': return 'green';
             default: return 'grey';
           }
         },
@@ -1337,6 +1821,11 @@
           const d = new Date(iso);
           return d.toLocaleDateString('en-GB');
         },
+        formatTime(iso) {
+          if (!iso) return '';
+          const d = new Date(iso);
+          return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        },
         showSnackbar(message, color = 'success') {
           this.snackbar.message = message;
           this.snackbar.color = color;
@@ -1357,20 +1846,7 @@
         }
       },
       created() {
-        google.script.run
-          .withSuccessHandler((res) => {
-            if (res && res.success) {
-              this.user = res.data;
-              this.setupMenu();
-              this.fetchAllUsers();
-            } else {
-              this.showSnackbar(res?.error || 'User not found', 'error');
-            }
-          })
-          .withFailureHandler((err) => {
-            this.showSnackbar('⚠️ Script error: ' + err.message, 'error');
-          })
-          .getUserSession();
+        this.tryForceAuth();
       }
     });
   </script>

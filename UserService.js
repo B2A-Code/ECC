@@ -22,29 +22,62 @@ function getUserSession() {
 }
 
 function getUserByEmail(email) {
-  Logger.log(`[getUserByEmail] Called with email: ${email}`);
+  Logger.log(`📥 [getUserByEmail] Function called with email: "${email}"`);
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(USER_SHEET);
-  const rows = sheet.getDataRange().getValues();
+
+  if (!sheet) {
+    Logger.log(`❌ [getUserByEmail] Sheet "${USER_SHEET}" not found.`);
+    throw new Error(`Sheet "${USER_SHEET}" not found.`);
+  }
+
+  const dataRange = sheet.getDataRange();
+  const rows = dataRange.getValues();
+  Logger.log(`📊 [getUserByEmail] Total rows retrieved: ${rows.length}`);
+
+  if (rows.length < 2) {
+    Logger.log(`⚠️ [getUserByEmail] No user data in sheet (only header or empty).`);
+    throw new Error('No users available');
+  }
+
   const headers = rows[0];
+  Logger.log(`🧭 [getUserByEmail] Headers: ${JSON.stringify(headers)}`);
 
   const emailIndex = headers.indexOf('Email');
-  Logger.log(`[getUserByEmail] Email column index: ${emailIndex}`);
+  Logger.log(`📌 [getUserByEmail] Email column index: ${emailIndex}`);
 
-  const userIndex = rows.findIndex((row, i) => {
-    const match = row[emailIndex] === email;
-    if (match) Logger.log(`[getUserByEmail] Match found on row ${i + 1}`);
-    return match;
-  });
+  if (emailIndex === -1) {
+    Logger.log(`❌ [getUserByEmail] "Email" column not found in headers.`);
+    throw new Error('Email column not found');
+  }
 
-  if (userIndex < 1) {
-    Logger.log(`[getUserByEmail] No matching user found for email: ${email}`);
+  let found = false;
+  let userIndex = -1;
+
+  for (let i = 1; i < rows.length; i++) {
+    const rowEmail = rows[i][emailIndex];
+    Logger.log(`🔎 [getUserByEmail] Checking row ${i + 1}: email="${rowEmail}"`);
+
+    if (String(rowEmail).trim().toLowerCase() === email.trim().toLowerCase()) {
+      Logger.log(`✅ [getUserByEmail] Match found at row ${i + 1}`);
+      userIndex = i;
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    Logger.log(`❌ [getUserByEmail] No matching user found for email: "${email}"`);
     throw new Error('User not found');
   }
 
-  const userObj = rowToObject(rows[userIndex], headers);
-  Logger.log(`[getUserByEmail] Returning user: ${JSON.stringify(userObj)}`);
+  const userRow = rows[userIndex];
+  Logger.log(`📦 [getUserByEmail] User row data: ${JSON.stringify(userRow)}`);
+
+  const userObj = rowToObject(userRow, headers);
+  Logger.log(`✅ [getUserByEmail] Returning user object: ${JSON.stringify(userObj)}`);
+
   return userObj;
 }
 
