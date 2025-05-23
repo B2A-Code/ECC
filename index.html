@@ -6,24 +6,25 @@
   <meta charset="UTF-8" />
   <title>B2A Employee Control Centre</title>
 
-  <!-- Vuetify 2 CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.6.15/dist/vuetify.min.css" rel="stylesheet">
+  <!-- ✅ Vue.js -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
 
-  <!-- Material Design Icons -->
+  <!-- ✅ Vuetify 2 -->
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.6.15/dist/vuetify.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.6.15/dist/vuetify.min.js"></script>
+
+  <!-- ✅ Material Icons -->
   <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.5.95/css/materialdesignicons.min.css" rel="stylesheet">
 
-  <!-- ApexCharts -->
+  <!-- ✅ Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter&family=Roboto+Slab:wght@600&display=swap" rel="stylesheet">
+
+  <!-- ✅ ApexCharts & Vue-ApexCharts -->
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue-apexcharts"></script>
 
-  <!-- Vue 2 -->
-  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
-
-  <!-- Vuetify JS -->
-  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.6.15/dist/vuetify.min.js"></script>
-
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter&family=Roboto+Slab:wght@600&display=swap" rel="stylesheet">
+  <!-- ✅ Google Calendar API -->
+  <script async defer src="https://apis.google.com/js/api.js"></script>
 
   <style>
     html,
@@ -327,6 +328,100 @@
               </v-data-table>
             </v-card-text>
           </v-card>
+
+<!-- 🌴 My Holidays View -->
+<v-card v-if="view === 'myholidays'" class="ma-4 pa-4">
+  <v-card-title>
+    My Holidays
+    <v-spacer></v-spacer>
+    <v-btn color="primary" small @click="openHolidayRequestDialog">Request Holiday</v-btn>
+  </v-card-title>
+
+  <v-row dense>
+    <v-col cols="6">
+      <v-alert border="left" type="info">
+        <strong>Days Remaining:</strong> {{ daysRemaining }}
+      </v-alert>
+    </v-col>
+    <v-col cols="6">
+      <v-alert border="left" type="success">
+        <strong>Days Taken:</strong> {{ daysTaken }}
+      </v-alert>
+    </v-col>
+  </v-row>
+
+  <v-list class="mt-3" two-line>
+    <v-list-item v-for="event in googleHolidayEvents" :key="event.id">
+      <v-list-item-content>
+        <v-list-item-title>{{ event.summary }}</v-list-item-title>
+        <v-list-item-subtitle>
+          {{ formatDate(event.start.date || event.start.dateTime) }} - 
+          {{ formatDate(event.end.date || event.end.dateTime) }}
+        </v-list-item-subtitle>
+      </v-list-item-content>
+    </v-list-item>
+  </v-list>
+</v-card>
+
+<!-- 🌴 Holiday Approvals (Manager) -->
+<v-card v-if="view === 'holidayapprovals'" class="ma-4 pa-4">
+  <v-card-title>
+    Team Holidays
+    <v-spacer></v-spacer>
+    <v-btn small icon @click="loadSharedCalendarEvents">
+      <v-icon>mdi-refresh</v-icon>
+    </v-btn>
+  </v-card-title>
+
+  <v-list dense class="mt-3">
+    <v-list-item v-for="event in teamHolidayEvents" :key="event.id">
+      <v-list-item-content>
+        <v-list-item-title>{{ event.summary }}</v-list-item-title>
+        <v-list-item-subtitle>
+          {{ formatDate(event.start.date || event.start.dateTime) }} - 
+          {{ formatDate(event.end.date || event.end.dateTime) }}
+        </v-list-item-subtitle>
+      </v-list-item-content>
+    </v-list-item>
+  </v-list>
+
+  <v-divider class="my-4"></v-divider>
+
+  <v-card-subtitle>Pending Requests (From DB)</v-card-subtitle>
+  <v-data-table
+    :headers="approvalTableHeaders"
+    :items="pendingHolidayRequests"
+    item-key="HolidayRequestID"
+    dense
+    class="elevation-1"
+  >
+    <template v-slot:item.actions="{ item }">
+      <v-btn small color="success" @click="approveHoliday(item)">Approve</v-btn>
+      <v-btn small color="error" @click="promptRejectHoliday(item)">Reject</v-btn>
+    </template>
+  </v-data-table>
+</v-card>
+
+<!-- 📅 My Availability (Contractors) -->
+<v-card v-if="view === 'myavailability'" class="ma-4 pa-4">
+  <v-card-title>
+    My Availability
+    <v-spacer></v-spacer>
+    <v-btn color="error" small @click="openAvailabilityDialog">Add Unavailable Time</v-btn>
+  </v-card-title>
+
+  <v-list class="mt-3">
+    <v-list-item v-for="ev in unavailableDates" :key="ev.id">
+      <v-list-item-content>
+        <v-list-item-title>{{ ev.summary }}</v-list-item-title>
+        <v-list-item-subtitle>
+          {{ formatDate(ev.start.date || ev.start.dateTime) }} - 
+          {{ formatDate(ev.end.date || ev.end.dateTime) }}
+        </v-list-item-subtitle>
+      </v-list-item-content>
+    </v-list-item>
+  </v-list>
+</v-card>
 
           <!-- 🧾 My Invoices -->
           <v-card v-if="view === 'myinvoices'" class="ma-4 pa-4" elevation="3">
@@ -749,6 +844,116 @@
           </v-card>
         </v-dialog>
 
+        <!-- 🗓 Holiday Request Modal -->
+        <v-dialog v-model="showHolidayRequestDialog" max-width="500px">
+          <v-card>
+            <v-card-title>Request Holiday</v-card-title>
+            <v-card-text>
+              <v-container>
+                <v-row>
+                  <v-col cols="12">
+                    <v-text-field v-model="newHoliday.Reason" label="Reason for holiday" />
+                  </v-col>
+                  <v-col cols="6">
+                    <v-menu ref="startMenu" v-model="startMenu" :close-on-content-click="false">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-text-field v-model="newHoliday.StartDate" label="Start Date" readonly v-bind="attrs"
+                          v-on="on" />
+                      </template>
+                      <v-date-picker v-model="newHoliday.StartDate" @input="startMenu = false" />
+                    </v-menu>
+                  </v-col>
+                  <v-col cols="6">
+                    <v-select :items="['Full', 'Half']" v-model="newHoliday.StartType" label="Start Type" />
+                  </v-col>
+
+                  <v-col cols="6">
+                    <v-menu ref="endMenu" v-model="endMenu" :close-on-content-click="false">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-text-field v-model="newHoliday.EndDate" label="End Date" readonly v-bind="attrs" v-on="on" />
+                      </template>
+                      <v-date-picker v-model="newHoliday.EndDate" @input="endMenu = false" />
+                    </v-menu>
+                  </v-col>
+                  <v-col cols="6">
+                    <v-select :items="['Full', 'Half']" v-model="newHoliday.EndType" label="End Type" />
+                  </v-col>
+                </v-row>
+              </v-container>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="requestHolidayDialog = false">Cancel</v-btn>
+              <v-btn color="primary" @click="submitHoliday">Submit</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- 🗓 Availability Modal -->
+        <v-dialog v-model="requestAvailabilityDialog" max-width="500px">
+          <v-card>
+            <v-card-title>Add Unavailable Time</v-card-title>
+            <v-card-text>
+              <v-container>
+                <v-row>
+                  <v-col cols="12">
+                    <v-text-field v-model="newAvailability.Reason" label="Reason (e.g., holiday, booked)" />
+                  </v-col>
+                  <v-col cols="6">
+                    <v-menu v-model="startUnavailableMenu" :close-on-content-click="false">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-text-field v-model="newAvailability.StartDate" label="Start Date" readonly v-bind="attrs"
+                          v-on="on" />
+                      </template>
+                      <v-date-picker v-model="newAvailability.StartDate" @input="startUnavailableMenu = false" />
+                    </v-menu>
+                  </v-col>
+                  <v-col cols="6">
+                    <v-menu v-model="endUnavailableMenu" :close-on-content-click="false">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-text-field v-model="newAvailability.EndDate" label="End Date" readonly v-bind="attrs"
+                          v-on="on" />
+                      </template>
+                      <v-date-picker v-model="newAvailability.EndDate" @input="endUnavailableMenu = false" />
+                    </v-menu>
+                  </v-col>
+                  <v-col cols="12">
+                    <v-select v-model="newAvailability.Repeat" :items="['None', 'Weekly']" label="Repeat" />
+                  </v-col>
+                </v-row>
+              </v-container>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="requestAvailabilityDialog = false">Cancel</v-btn>
+              <v-btn color="error" @click="submitAvailability">Save</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- ❌ Reject Holiday Dialog -->
+        <v-dialog v-model="rejectDialogVisible" max-width="500px">
+          <v-card>
+            <v-card-title class="headline red--text">
+              Reject Holiday Request
+            </v-card-title>
+            <v-card-text>
+              <p>
+                Reject holiday request for <strong>{{ rejectTarget?.FullName }}</strong> from
+                <strong>{{ formatDate(rejectTarget?.StartDate) }}</strong> to
+                <strong>{{ formatDate(rejectTarget?.EndDate) }}</strong>?
+              </p>
+              <v-textarea v-model="rejectionReason" label="Reason for Rejection" auto-grow outlined required>
+              </v-textarea>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="rejectDialogVisible = false">Cancel</v-btn>
+              <v-btn color="error" @click="confirmRejectHoliday">Reject</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
         <!-- 🧾 Create Manual Invoice Modal -->
         <v-dialog v-model="createInvoiceDialog" max-width="600px" persistent>
           <v-card>
@@ -802,135 +1007,135 @@
                 </v-row>
               </v-container>
             </v-card-text>
+        </v-dialog>
 
-            <!-- 🔍 Invoice Preview Dialog -->
-            <v-dialog v-model="previewInvoiceDialog" max-width="700px" persistent>
-              <v-card>
-                <v-toolbar flat color="#000000" dark>
-                  <v-toolbar-title>Invoice Preview</v-toolbar-title>
-                  <v-spacer></v-spacer>
-                  <v-btn icon @click="previewInvoiceDialog = false">
-                    <v-icon>mdi-close</v-icon>
-                  </v-btn>
-                </v-toolbar>
+        <!-- 🔍 Invoice Preview Dialog -->
+        <v-dialog v-model="previewInvoiceDialog" max-width="700px" persistent>
+          <v-card>
+            <v-toolbar flat color="#000000" dark>
+              <v-toolbar-title>Invoice Preview</v-toolbar-title>
+              <v-spacer></v-spacer>
+              <v-btn icon @click="previewInvoiceDialog = false">
+                <v-icon>mdi-close</v-icon>
+              </v-btn>
+            </v-toolbar>
 
-                <v-divider class="my-2"></v-divider>
+            <v-divider class="my-2"></v-divider>
 
-                <v-card-text>
-                  <v-container>
-                    <v-row>
-                      <v-col cols="6">
-                        <p><strong>Invoice ID:</strong> {{ previewInvoice.InvoiceID }}</p>
-                        <p><strong>Status:</strong> {{ previewInvoice.Status }}</p>
-                        <p><strong>Date:</strong> {{ formatDate(previewInvoice.InvoiceDate) }}</p>
-                      </v-col>
-                      <v-col cols="6">
-                        <p><strong>Total:</strong> £{{ Number(previewInvoice.TotalAmount).toFixed(2) }}</p>
-                        <p><strong>Type:</strong> {{ previewInvoice.InvoiceType }}</p>
-                      </v-col>
-                    </v-row>
+            <v-card-text>
+              <v-container>
+                <v-row>
+                  <v-col cols="6">
+                    <p><strong>Invoice ID:</strong> {{ previewInvoice.InvoiceID }}</p>
+                    <p><strong>Status:</strong> {{ previewInvoice.Status }}</p>
+                    <p><strong>Date:</strong> {{ formatDate(previewInvoice.InvoiceDate) }}</p>
+                  </v-col>
+                  <v-col cols="6">
+                    <p><strong>Total:</strong> £{{ Number(previewInvoice.TotalAmount).toFixed(2) }}</p>
+                    <p><strong>Type:</strong> {{ previewInvoice.InvoiceType }}</p>
+                  </v-col>
+                </v-row>
 
-                    <v-divider class="my-3"></v-divider>
+                <v-divider class="my-3"></v-divider>
 
-                    <v-data-table :headers="[
+                <v-data-table :headers="[
                       { text: 'Description', value: 'Description' },
                       { text: 'Qty', value: 'Quantity' },
                       { text: 'Unit Price', value: 'UnitPrice' },
                       { text: 'Line Total', value: 'LineTotal' }
                     ]" :items="previewInvoiceItems" dense hide-default-footer>
-                      <template v-slot:item.UnitPrice="{ item }">
-                        £{{ Number(item.UnitPrice).toFixed(2) }}
-                      </template>
-                      <template v-slot:item.LineTotal="{ item }">
-                        £{{ Number(item.LineTotal).toFixed(2) }}
-                      </template>
-                    </v-data-table>
-                  </v-container>
-                </v-card-text>
-
-                <v-card-actions>
-                  <v-spacer></v-spacer>
-                  <v-btn text @click="previewInvoiceDialog = false">Close</v-btn>
-                </v-card-actions>
-              </v-card>
-            </v-dialog>
-
-            <!-- 🧾 Department Invoices -->
-            <v-container v-if="view === 'departmentinvoices'" fluid>
-              <v-row>
-                <v-col cols="12">
-                  <v-card class="pa-4" elevation="3">
-                    <v-card-title>
-                      Department Invoices
-                      <v-spacer></v-spacer>
-                      <v-btn small icon @click="fetchDepartmentInvoices">
-                        <v-icon>mdi-refresh</v-icon>
-                      </v-btn>
-                    </v-card-title>
-
-                    <v-divider class="my-2"></v-divider>
-
-                    <v-data-table :headers="invoiceTableHeadersManager" :items="departmentInvoices" item-key="InvoiceID"
-                      dense hide-default-footer>
-                      <template v-slot:item.actions="{ item }">
-                        <v-btn icon small @click="approveInvoice(item)">
-                          <v-icon color="green">mdi-check</v-icon>
-                        </v-btn>
-                        <v-btn icon small @click="rejectInvoice(item)">
-                          <v-icon color="red">mdi-close</v-icon>
-                        </v-btn>
-                      </template>
-
-                      <template v-slot:no-data>
-                        <v-alert type="info">No invoices pending approval.</v-alert>
-                      </template>
-                    </v-data-table>
-                  </v-card>
-                </v-col>
-              </v-row>
-            </v-container>
-
-            <!-- 🧾 Create New Invoice Modal -->
-            <v-dialog v-model="newInvoiceDialog" max-width="600px">
-              <v-card>
-                <v-card-title>
-                  <span class="text-h6">New Manual Invoice</span>
-                </v-card-title>
-                <v-card-text>
-                  <v-container>
-                    <v-row>
-                      <v-col cols="12">
-                        <v-select :items="['CPD', 'Expense', 'Course']" label="Invoice Type"
-                          v-model="manualInvoice.InvoiceType" required />
-                      </v-col>
-                      <v-col cols="12">
-                        <v-text-field label="Description / Purpose" v-model="manualInvoice.DescriptionOrPurpose"
-                          required />
-                      </v-col>
-                      <v-col cols="12">
-                        <v-text-field label="Amount (£)" type="number" v-model="manualInvoice.TotalAmount" required />
-                      </v-col>
-                      <v-col cols="12">
-                        <v-file-input v-model="manualInvoice.file" label="Upload Receipt (optional)"
-                          accept="image/*,application/pdf" prepend-icon="mdi-paperclip" />
-                      </v-col>
-                    </v-row>
-                  </v-container>
-                </v-card-text>
-                <v-card-actions>
-                  <v-spacer></v-spacer>
-                  <v-btn text @click="newInvoiceDialog = false">Cancel</v-btn>
-                  <v-btn color="primary" @click="saveManualInvoice">Save Draft</v-btn>
-                </v-card-actions>
-              </v-card>
-            </v-dialog>
+                  <template v-slot:item.UnitPrice="{ item }">
+                    £{{ Number(item.UnitPrice).toFixed(2) }}
+                  </template>
+                  <template v-slot:item.LineTotal="{ item }">
+                    £{{ Number(item.LineTotal).toFixed(2) }}
+                  </template>
+                </v-data-table>
+              </v-container>
+            </v-card-text>
 
             <v-card-actions>
               <v-spacer></v-spacer>
-              <v-btn text @click="createInvoiceDialog = false">Cancel</v-btn>
-              <v-btn color="primary" @click="submitManualInvoice">Submit</v-btn>
+              <v-btn text @click="previewInvoiceDialog = false">Close</v-btn>
             </v-card-actions>
           </v-card>
+        </v-dialog>
+
+        <!-- 🧾 Department Invoices -->
+        <v-container v-if="view === 'departmentinvoices'" fluid>
+          <v-row>
+            <v-col cols="12">
+              <v-card class="pa-4" elevation="3">
+                <v-card-title>
+                  Department Invoices
+                  <v-spacer></v-spacer>
+                  <v-btn small icon @click="fetchDepartmentInvoices">
+                    <v-icon>mdi-refresh</v-icon>
+                  </v-btn>
+                </v-card-title>
+
+                <v-divider class="my-2"></v-divider>
+
+                <v-data-table :headers="invoiceTableHeadersManager" :items="departmentInvoices" item-key="InvoiceID"
+                  dense hide-default-footer>
+                  <template v-slot:item.actions="{ item }">
+                    <v-btn icon small @click="approveInvoice(item)">
+                      <v-icon color="green">mdi-check</v-icon>
+                    </v-btn>
+                    <v-btn icon small @click="rejectInvoice(item)">
+                      <v-icon color="red">mdi-close</v-icon>
+                    </v-btn>
+                  </template>
+
+                  <template v-slot:no-data>
+                    <v-alert type="info">No invoices pending approval.</v-alert>
+                  </template>
+                </v-data-table>
+              </v-card>
+            </v-col>
+          </v-row>
+        </v-container>
+
+        <!-- 🧾 Create New Invoice Modal -->
+        <v-dialog v-model="newInvoiceDialog" max-width="600px">
+          <v-card>
+            <v-card-title>
+              <span class="text-h6">New Manual Invoice</span>
+            </v-card-title>
+            <v-card-text>
+              <v-container>
+                <v-row>
+                  <v-col cols="12">
+                    <v-select :items="['CPD', 'Expense', 'Course']" label="Invoice Type"
+                      v-model="manualInvoice.InvoiceType" required />
+                  </v-col>
+                  <v-col cols="12">
+                    <v-text-field label="Description / Purpose" v-model="manualInvoice.DescriptionOrPurpose" required />
+                  </v-col>
+                  <v-col cols="12">
+                    <v-text-field label="Amount (£)" type="number" v-model="manualInvoice.TotalAmount" required />
+                  </v-col>
+                  <v-col cols="12">
+                    <v-file-input v-model="manualInvoice.file" label="Upload Receipt (optional)"
+                      accept="image/*,application/pdf" prepend-icon="mdi-paperclip" />
+                  </v-col>
+                </v-row>
+              </v-container>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="newInvoiceDialog = false">Cancel</v-btn>
+              <v-btn color="primary" @click="saveManualInvoice">Save Draft</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn text @click="createInvoiceDialog = false">Cancel</v-btn>
+          <v-btn color="primary" @click="submitManualInvoice">Submit</v-btn>
+        </v-card-actions>
+        </v-card>
         </v-dialog>
 
         <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" top right>
@@ -940,346 +1145,42 @@
   </div>
 
   <script>
-    new Vue({
-      el: '#app',
-      vuetify: new Vuetify(),
-      data: () => ({
-        // 🔐 Session & Auth
-        user: {
-          FirstName: '',
-          LastName: '',
-          Email: '',
-          Role: '',
-          Department: '',
-          Avatar: ''
-        },
-        sessionInitialized: false,
-        authTried: false,
+      new Vue({
+        el: '#app',
+        vuetify: new Vuetify(),
+        data: () => ({
+          // 🔐 Session & Auth
+          user: {
+            FirstName: '',
+            LastName: '',
+            Email: '',
+            Role: '',
+            Department: '',
+            Avatar: ''
+          },
+          sessionInitialized: false,
+          authTried: false,
 
-        // 🧭 UI Layout
-        drawer: true,
-        mini: true,
-        view: 'dashboard',
-        snackbar: {
-          show: false,
-          message: '',
-          color: 'success'
-        },
+          // 🧭 UI Layout
+          drawer: true,
+          mini: true,
+          view: 'dashboard',
+          snackbar: {
+            show: false,
+            message: '',
+            color: 'success'
+          },
 
-        // 📋 Navigation & Dialogs
-        menuItems: [],
-        showProfileDialog: false,
-        dialog: false,
-        dialogMode: 'create',
-        dobMenu: false,
+          // 📋 Navigation & Dialogs
+          menuItems: [],
+          showProfileDialog: false,
+          dialog: false,
+          dialogMode: 'create',
+          dobMenu: false,
 
-        // 👥 Users
-        users: [],
-        newUser: {
-          FirstName: '',
-          LastName: '',
-          Email: '',
-          DateOfBirth: '',
-          MobileNumber: '',
-          Role: '',
-          Department: '',
-          HourlyRate: '',
-          HolidayEntitlementAccruedHours: '',
-          EmergencyContactName: '',
-          EmergencyContactPhone: '',
-          HealthConditions: '',
-          Medication: '',
-          BankDetailsConfirmation: false,
-          DBSDetails: '',
-          FirstAidQualifications: '',
-          AccountStatus: 'Active',
-          Avatar: ''
-        },
-        roles: ['Administrator', 'Manager', 'Employee', 'CFO'],
-        departments: ['SIC', 'Performance', 'Operations', 'Creative', 'B2AFC'],
-        defaultAvatars: [
-          { name: 'Avatar 1', url: "https://i.imgur.com/oUwa7Cp.png" },
-          { name: 'Avatar 2', url: "https://i.imgur.com/hOXDMjL.png" },
-          { name: 'Avatar 3', url: "https://i.imgur.com/FruCSSo.png" },
-          { name: 'Avatar 4', url: "https://i.imgur.com/3k6vlod.png" },
-          { name: 'Avatar 5', url: "https://i.imgur.com/GWi8dIT.png" },
-          { name: 'Avatar 6', url: "https://i.imgur.com/sXTnvXJ.png" },
-          { name: 'Avatar 7', url: "https://i.imgur.com/Lo3TtOG.png" },
-          { name: 'Avatar 8', url: "https://i.imgur.com/cv25eU6.png" },
-          { name: 'Avatar 9', url: "https://i.imgur.com/QViei3X.png" },
-          { name: 'Avatar 10', url: "https://i.imgur.com/KeF2S2I.png" },
-          { name: 'Avatar 11', url: "https://i.imgur.com/mnjnF0P.png" },
-          { name: 'Avatar 12', url: "https://i.imgur.com/kwti8sD.png" },
-          { name: 'Avatar 13', url: "https://i.imgur.com/pGPh6sy.png" },
-          { name: 'Avatar 14', url: "https://i.imgur.com/xKXLi9C.png" },
-          { name: 'Avatar 15', url: "https://i.imgur.com/hI7LeoX.png" },
-          { name: 'Avatar 16', url: "https://i.imgur.com/BCgc4bR.png" },
-          { name: 'Avatar 17', url: "https://i.imgur.com/V4nuXxZ.png" },
-          { name: 'Avatar 18', url: "https://i.imgur.com/5VseQPv.png" }
-        ],
-
-        // 🕑 Shift Management
-        teamShifts: [],
-        offeredShifts: [],
-        assignedShifts: [],
-        availableEmployees: [],
-        shiftTypes: [
-          "Adults S&C (Mixed)", "Ballerz Technical Session", "Boxing S&C", "Girls. FTBL COE",
-          "Inital Assessment", "MSK (Clinic)", "MSK (SGR)", "Niggle Clinic",
-          "SG S&C", "Soft Tissue", "YATS"
-        ],
-        newShift: {
-          ShiftDate: '',
-          StartTime: '',
-          EndTime: '',
-          ShiftType: '',
-          Description: '',
-          SelectedEmployees: []
-        },
-        createShiftDialog: false,
-
-        // ✅ Shift Action Modal (wizard style)
-        shiftActionDialog: false,
-        shiftActionStep: 1,
-        shiftActionType: '', // 'decline' or 'complete'
-        selectedShift: null,
-        declineReason: '',
-        actualHours: '',
-
-        // 🧾 My Invoices
-        myInvoices: [],
-        previewInvoiceDialog: false,
-        previewInvoice: {},
-        previewInvoiceItems: [],
-        viewInvoiceDialog: false,
-        selectedInvoice: {},
-        createInvoiceDialog: false,
-        newInvoiceDialog: false,
-        invoiceDateMenu: false,
-        manualInvoiceTypes: ['CPD', 'Expense', 'Course'],
-        newInvoice: {
-          InvoiceType: '',
-          InvoiceDate: '',
-          TotalAmount: '',
-          DescriptionOrPurpose: '',
-          ReceiptFile: null
-        },
-        manualInvoice: {
-          InvoiceType: '',
-          DescriptionOrPurpose: '',
-          TotalAmount: '',
-          ExpenseReceiptFileID: '',
-          Status: 'Draft'
-        },
-        departmentInvoices: [],
-
-        // 📋 Table Headers
-        shiftTableHeaders: [
-          { text: 'Date', value: 'shift-date' },
-          { text: 'Type', value: 'shift-type' },
-          { text: 'Start', value: 'start-time' },
-          { text: 'End', value: 'end-time' },
-          { text: 'Department', value: 'department' },
-          { text: 'Status', value: 'status' },
-          { text: 'Assigned To', value: 'assigned-to' },
-          { text: 'Actions', value: 'actions', sortable: false }
-        ],
-        shiftTableHeadersAssigned: [
-          { text: 'Date', value: 'shift-date' },
-          { text: 'Type', value: 'shift-type' },
-          { text: 'Start', value: 'start-time' },
-          { text: 'End', value: 'end-time' },
-          { text: 'Status', value: 'status' },
-          { text: 'Actual Hours', value: 'actual-hours-worked' },
-          { text: 'Actions', value: 'actions', sortable: false }
-        ],
-        managerShiftTableHeaders: [
-          { text: 'Date', value: 'shift-date' },
-          { text: 'Type', value: 'shift-type' },
-          { text: 'Start', value: 'start-time' },
-          { text: 'End', value: 'end-time' },
-          { text: 'Department', value: 'department' },
-          { text: 'Status', value: 'status' },
-          { text: 'Assigned To', value: 'assigned-to' },
-          { text: 'Declined Reason', value: 'declined-reason' },
-          { text: 'Actions', value: 'actions', sortable: false }
-        ],
-        invoiceTableHeaders: [
-          { text: 'Date', value: 'invoice-date' },
-          { text: 'Type', value: 'invoice-type' },
-          { text: 'Amount (£)', value: 'total-amount' },
-          { text: 'Status', value: 'status' },
-          { text: 'Purpose', value: 'description-or-purpose' },
-          { text: 'Actions', value: 'actions', sortable: false }
-        ],
-        invoiceTableHeadersManager: [
-          { text: 'Date', value: 'InvoiceDate' },
-          { text: 'Type', value: 'InvoiceType' },
-          { text: 'Employee', value: 'EmployeeName' },
-          { text: 'Amount', value: 'TotalAmount' },
-          { text: 'Status', value: 'Status' },
-          { text: 'Actions', value: 'actions', sortable: false }
-        ]
-      }),
-      methods: {
-        tryForceAuth() {
-          google.script.run
-            .withSuccessHandler((email) => {
-              if (email) {
-                console.log("✅ Auto-auth success:", email);
-                this.sessionInitialized = true;
-                this.fetchUserSession(); // ← triggers what you had in created()
-              } else {
-                console.warn("🟡 No email returned (probably not authorized yet)");
-              }
-              this.authTried = true;
-            })
-            .withFailureHandler((err) => {
-              console.error("❌ Auth error", err.message);
-              this.authTried = true;
-            })
-            .forceUserAuth(); // your GAS function
-        },
-        startAppManually() {
-          google.script.run
-            .withSuccessHandler((email) => {
-              if (email) {
-                console.log("✅ Manual auth success:", email);
-                this.sessionInitialized = true;
-                this.fetchUserSession();
-              } else {
-                this.showSnackbar("⚠️ Still unauthorized", "warning");
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("❌ Auth failed: " + err.message, "error");
-            })
-            .forceUserAuth();
-        },
-        fetchUserSession() {
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (res && res.success) {
-                this.user = res.data;
-                this.setupMenu();
-                this.fetchAllUsers();
-              } else {
-                this.showSnackbar(res?.error || 'User not found', 'error');
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar('⚠️ Script error: ' + err.message, 'error');
-            })
-            .getUserSession();
-        },
-        setupMenu() {
-          const role = this.user.Role;
-          if (role === 'Administrator') {
-            this.menuItems = [
-              { text: 'Dashboard', icon: 'mdi-view-dashboard' },
-              { text: 'Users', icon: 'mdi-account-multiple' },
-              { text: 'Settings', icon: 'mdi-cog' }
-            ];
-          } else if (role === 'Manager') {
-            this.menuItems = [
-              { text: 'Dashboard', icon: 'mdi-view-dashboard' },
-              { text: 'Team Shifts', icon: 'mdi-calendar-clock' },
-              { text: 'Invoices', icon: 'mdi-file-document' }
-            ];
-          } else if (role === 'Employee') {
-            this.menuItems = [
-              { text: 'Dashboard', icon: 'mdi-home' },
-              { text: 'My Shifts', icon: 'mdi-calendar-check' },
-              { text: 'Invoices', icon: 'mdi-cash' }
-            ];
-          } else if (role === 'CFO') {
-            this.menuItems = [
-              { text: 'Dashboard', icon: 'mdi-finance' },
-              { text: 'Reports', icon: 'mdi-chart-bar' },
-              { text: 'Invoices', icon: 'mdi-currency-usd' }
-            ];
-          } else {
-            this.menuItems = [{ text: 'Dashboard', icon: 'mdi-alert' }];
-          }
-        },
-        navigate(item) {
-          const viewKey = item.text.toLowerCase().replace(/\s+/g, '');
-          this.view = viewKey;
-
-          switch (viewKey) {
-            case 'users':
-              this.fetchAllUsers();
-              break;
-            case 'myshifts':
-              this.loadMyShifts();
-              break;
-            case 'teamshifts':
-              this.fetchTeamShifts();
-              break;
-            case 'myinvoices':
-              this.fetchMyInvoices();
-              break;
-            case 'departmentinvoices':
-              this.fetchDepartmentInvoices();
-              break;
-            // add other routes as needed
-            default:
-              break;
-          }
-        },
-        fetchAllUsers() {
-          const self = this;
-          google.script.run
-            .withSuccessHandler(res => {
-              if (Array.isArray(res)) {
-                self.users = res;
-              } else {
-                self.showSnackbar('Failed to fetch users', 'error');
-              }
-            })
-            .withFailureHandler(err => {
-              self.showSnackbar('⚠️ Script error: ' + err.message, 'error');
-            })
-            .getAllUsers();
-        },
-        createUser() {
-          const formatDate = (date) => {
-            if (!date) return '';
-            return typeof date === 'string' ? date : new Date(date).toISOString();
-          };
-
-          const payload = {
-            ...this.newUser,
-            DateOfBirth: formatDate(this.newUser.DateOfBirth),
-            Avatar: this.newUser.Avatar?.url || this.newUser.Avatar || '',
-            CreatedAt: this.dialogMode === 'edit' ? this.newUser.CreatedAt : new Date().toISOString(),
-            UpdatedAt: new Date().toISOString(),
-            BankDetailsConfirmation: !!this.newUser.BankDetailsConfirmation
-          };
-
-          const runner = google.script.run
-            .withSuccessHandler((res) => {
-              if (res.success) {
-                this.dialog = false;
-                this.fetchAllUsers?.();
-                this.showSnackbar(`✅ User ${this.dialogMode === 'edit' ? 'updated' : 'created'} successfully!`, 'success');
-                this.resetForm();
-              } else {
-                this.showSnackbar(`❌ Failed to ${this.dialogMode === 'edit' ? 'update' : 'create'} user: ` + res.error, 'error');
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar(`⚠️ Script error: ${err.message}`, 'error');
-            });
-
-          if (this.dialogMode === 'edit') {
-            runner.updateUser(payload);
-          } else {
-            runner.createUser(payload);
-          }
-        },
-        resetForm() {
-          this.newUser = {
+          // 👥 User Management
+          users: [],
+          newUser: {
             FirstName: '',
             LastName: '',
             Email: '',
@@ -1298,144 +1199,679 @@
             FirstAidQualifications: '',
             AccountStatus: 'Active',
             Avatar: ''
-          };
-        },
-        editUser(user) {
-          this.newUser = { ...user };
-          this.dialogMode = 'edit';
-          this.dialog = true;
-        },
-        viewUser(user) {
-          this.newUser = { ...user };
-          this.dialogMode = 'view';
-          this.dialog = true;
-        },
-        createUserDialog() {
-          this.resetForm();
-          this.dialogMode = 'create';
-          this.dialog = true;
-        },
-        confirmDeleteUser(user) {
-          if (confirm(`Are you sure you want to delete ${user.FirstName} ${user.LastName}?`)) {
-            this.deleteUser(user.UserID);
-          }
-        },
-        deleteUser(userId) {
-          google.script.run
-            .withSuccessHandler(() => {
-              this.showSnackbar("✅ User deleted", "success");
-              this.fetchAllUsers();
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("❌ Delete failed: " + err.message, "error");
-            })
-            .deleteUserById(userId);
-        },
-        toggleAccountStatus(user) {
-          const newStatus = user.AccountStatus === 'Active' ? 'Disabled' : 'Active';
-          const updatedUser = {
-            ...user,
-            AccountStatus: newStatus,
-            UpdatedAt: new Date().toISOString()
-          };
+          },
+          roles: ['Administrator', 'Manager', 'Employee', 'CFO'],
+          departments: ['SIC', 'Performance', 'Operations', 'Creative', 'B2AFC'],
+          defaultAvatars: [
+            { name: 'Avatar 1', url: "https://i.imgur.com/oUwa7Cp.png" },
+            { name: 'Avatar 2', url: "https://i.imgur.com/hOXDMjL.png" },
+            { name: 'Avatar 3', url: "https://i.imgur.com/FruCSSo.png" },
+            { name: 'Avatar 4', url: "https://i.imgur.com/3k6vlod.png" },
+            { name: 'Avatar 5', url: "https://i.imgur.com/GWi8dIT.png" },
+            { name: 'Avatar 6', url: "https://i.imgur.com/sXTnvXJ.png" },
+            { name: 'Avatar 7', url: "https://i.imgur.com/Lo3TtOG.png" },
+            { name: 'Avatar 8', url: "https://i.imgur.com/cv25eU6.png" },
+            { name: 'Avatar 9', url: "https://i.imgur.com/QViei3X.png" },
+            { name: 'Avatar 10', url: "https://i.imgur.com/KeF2S2I.png" },
+            { name: 'Avatar 11', url: "https://i.imgur.com/mnjnF0P.png" },
+            { name: 'Avatar 12', url: "https://i.imgur.com/kwti8sD.png" },
+            { name: 'Avatar 13', url: "https://i.imgur.com/pGPh6sy.png" },
+            { name: 'Avatar 14', url: "https://i.imgur.com/xKXLi9C.png" },
+            { name: 'Avatar 15', url: "https://i.imgur.com/hI7LeoX.png" },
+            { name: 'Avatar 16', url: "https://i.imgur.com/BCgc4bR.png" },
+            { name: 'Avatar 17', url: "https://i.imgur.com/V4nuXxZ.png" },
+            { name: 'Avatar 18', url: "https://i.imgur.com/5VseQPv.png" }
+          ],
 
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (res.success) {
-                this.showSnackbar(`✔️ Account status changed to ${newStatus}`, 'success');
-                this.fetchAllUsers();
-              } else {
-                this.showSnackbar(`❌ Failed to update user status: ${res.error}`, 'error');
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar(`⚠️ Script error: ${err.message}`, 'error');
-            })
-            .updateUser(updatedUser);
-        },
-        openCreateShiftDialog() {
-          google.script.run
-            .withSuccessHandler((res) => {
-              this.availableEmployees = res;
-              this.newShift = {
-                ShiftDate: '',
-                StartTime: '',
-                EndTime: '',
-                ShiftType: '',
-                Description: '',
-                SelectedEmployees: []
-              };
-              this.createShiftDialog = true;
-            })
-            .withFailureHandler(err => {
-              this.showSnackbar("❌ Failed to load employees: " + err.message, "error");
-            })
-            .getEligibleEmployeesForShift(this.user.Department);
-        },
-        submitNewShift() {
-          const payload = {
-            ...this.newShift,
-            Department: this.user.Department
-          };
+          // 🕑 Shift Management
+          teamShifts: [],
+          offeredShifts: [],
+          assignedShifts: [],
+          availableEmployees: [],
+          shiftTypes: [
+            "Adults S&C (Mixed)", "Ballerz Technical Session", "Boxing S&C", "Girls. FTBL COE",
+            "Inital Assessment", "MSK (Clinic)", "MSK (SGR)", "Niggle Clinic",
+            "SG S&C", "Soft Tissue", "YATS"
+          ],
+          newShift: {
+            ShiftDate: '',
+            StartTime: '',
+            EndTime: '',
+            ShiftType: '',
+            Description: '',
+            SelectedEmployees: []
+          },
+          createShiftDialog: false,
 
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (res.success) {
-                this.showSnackbar("✅ Shift(s) created", "success");
-                this.createShiftDialog = false;
-                this.fetchTeamShifts();
-              } else {
-                this.showSnackbar("❌ " + res.error, "error");
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("❌ Failed to create shift: " + err.message, "error");
-            })
-            .createShiftForEmployees(payload);
-        },
-        openShiftActionDialog(shift) {
-          this.selectedShift = shift;
-          this.shiftActionStep = 1;
-          this.shiftActionType = '';
-          this.declineReason = '';
-          this.actualHours = '';
-          this.shiftActionDialog = true;
-        },
+          shiftActionDialog: false,
+          shiftActionStep: 1,
+          shiftActionType: '',
+          selectedShift: null,
+          declineReason: '',
+          actualHours: '',
 
-        chooseAction(type) {
-          this.shiftActionType = type;
-          this.shiftActionStep = 2;
-        },
+          // 🧾 Invoice Management
+          myInvoices: [],
+          previewInvoiceDialog: false,
+          previewInvoice: {},
+          previewInvoiceItems: [],
+          viewInvoiceDialog: false,
+          selectedInvoice: {},
+          createInvoiceDialog: false,
+          newInvoiceDialog: false,
+          invoiceDateMenu: false,
+          manualInvoiceTypes: ['CPD', 'Expense', 'Course'],
+          newInvoice: {
+            InvoiceType: '',
+            InvoiceDate: '',
+            TotalAmount: '',
+            DescriptionOrPurpose: '',
+            ReceiptFile: null
+          },
+          manualInvoice: {
+            InvoiceType: '',
+            DescriptionOrPurpose: '',
+            TotalAmount: '',
+            ExpenseReceiptFileID: '',
+            Status: 'Draft'
+          },
+          departmentInvoices: [],
+          
+          // 🏖️ Holiday Management
+          showHolidayRequestDialog: false,
+          newHoliday: {
+            StartDate: '',
+            EndDate: '',
+            Reason: ''
+          },
+          rejectDialogVisible: false,
+          rejectionReason: '',
+          rejectTarget: null,
+          googleHolidayEvents: [],
+          teamHolidayEvents: [],
+          pendingHolidayRequests: [],
+          holidaysTaken: 0,
+          holidayRemaining: 0,
+          HOLIDAY_ENTITLEMENT: 28,
+          googleEvents: [],
+          requestHolidayDialog: false,
 
-        submitShiftAction() {
-          const shift = this.selectedShift;
-          if (!shift) return;
+          // 🛑 Availability Management
+          requestAvailabilityDialog: false,
+          newAvailability: {
+            StartDate: '',
+            EndDate: '',
+            Reason: ''
+          },
+          unavailableDates: [],
 
-          if (this.shiftActionType === 'complete') {
-            const hours = parseFloat(this.actualHours);
-            if (isNaN(hours)) {
-              this.showSnackbar("⚠️ Enter valid hours.", "warning");
-              return;
+          // 📋 Table Headers
+          shiftTableHeaders: [
+            { text: 'Date', value: 'shift-date' },
+            { text: 'Type', value: 'shift-type' },
+            { text: 'Start', value: 'start-time' },
+            { text: 'End', value: 'end-time' },
+            { text: 'Department', value: 'department' },
+            { text: 'Status', value: 'status' },
+            { text: 'Assigned To', value: 'assigned-to' },
+            { text: 'Actions', value: 'actions', sortable: false }
+          ],
+          shiftTableHeadersAssigned: [
+            { text: 'Date', value: 'shift-date' },
+            { text: 'Type', value: 'shift-type' },
+            { text: 'Start', value: 'start-time' },
+            { text: 'End', value: 'end-time' },
+            { text: 'Status', value: 'status' },
+            { text: 'Actual Hours', value: 'actual-hours-worked' },
+            { text: 'Actions', value: 'actions', sortable: false }
+          ],
+          managerShiftTableHeaders: [
+            { text: 'Date', value: 'shift-date' },
+            { text: 'Type', value: 'shift-type' },
+            { text: 'Start', value: 'start-time' },
+            { text: 'End', value: 'end-time' },
+            { text: 'Department', value: 'department' },
+            { text: 'Status', value: 'status' },
+            { text: 'Assigned To', value: 'assigned-to' },
+            { text: 'Declined Reason', value: 'declined-reason' },
+            { text: 'Actions', value: 'actions', sortable: false }
+          ],
+          invoiceTableHeaders: [
+            { text: 'Date', value: 'invoice-date' },
+            { text: 'Type', value: 'invoice-type' },
+            { text: 'Amount (£)', value: 'total-amount' },
+            { text: 'Status', value: 'status' },
+            { text: 'Purpose', value: 'description-or-purpose' },
+            { text: 'Actions', value: 'actions', sortable: false }
+          ],
+          invoiceTableHeadersManager: [
+            { text: 'Date', value: 'InvoiceDate' },
+            { text: 'Type', value: 'InvoiceType' },
+            { text: 'Employee', value: 'EmployeeName' },
+            { text: 'Amount', value: 'TotalAmount' },
+            { text: 'Status', value: 'Status' },
+            { text: 'Actions', value: 'actions', sortable: false }
+          ],
+          approvalTableHeaders: [
+            { text: 'Employee', value: 'FullName' },
+            { text: 'Start', value: 'StartDate' },
+            { text: 'End', value: 'EndDate' },
+            { text: 'Days', value: 'NumberOfDays' },
+            { text: 'Reason', value: 'Reason' },
+            { text: 'Actions', value: 'actions', sortable: false }
+          ],
+        }),
+        methods: {
+          tryForceAuth() {
+            google.script.run
+              .withSuccessHandler((email) => {
+                if (email) {
+                  console.log("✅ Auto-auth success:", email);
+                  this.sessionInitialized = true;
+                  this.fetchUserSession(); // ← triggers what you had in created()
+                } else {
+                  console.warn("🟡 No email returned (probably not authorized yet)");
+                }
+                this.authTried = true;
+              })
+              .withFailureHandler((err) => {
+                console.error("❌ Auth error", err.message);
+                this.authTried = true;
+              })
+              .forceUserAuth(); // your GAS function
+          },
+          startAppManually() {
+            google.script.run
+              .withSuccessHandler((email) => {
+                if (email) {
+                  console.log("✅ Manual auth success:", email);
+                  this.sessionInitialized = true;
+                  this.fetchUserSession();
+                } else {
+                  this.showSnackbar("⚠️ Still unauthorized", "warning");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ Auth failed: " + err.message, "error");
+              })
+              .forceUserAuth();
+          },
+          fetchUserSession() {
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res && res.success) {
+                  this.user = res.data;
+                  this.setupMenu();
+                  this.fetchAllUsers();
+                } else {
+                  this.showSnackbar(res?.error || 'User not found', 'error');
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar('⚠️ Script error: ' + err.message, 'error');
+              })
+              .getUserSession();
+          },
+          setupMenu() {
+            const role = this.user.Role;
+            const isPermanent = this.user.Permanent === true || this.user.Permanent === 'TRUE';
+
+            if (role === 'Administrator') {
+              this.menuItems = [
+                { text: 'Dashboard', icon: 'mdi-view-dashboard' },
+                { text: 'Users', icon: 'mdi-account-multiple' },
+                { text: 'Settings', icon: 'mdi-cog' }
+              ];
+            } else if (role === 'Manager') {
+              this.menuItems = [
+                { text: 'Dashboard', icon: 'mdi-view-dashboard' },
+                { text: 'Team Shifts', icon: 'mdi-calendar-clock' },
+                { text: 'Invoices', icon: 'mdi-file-document' },
+                { text: 'My Holidays', icon: 'mdi-beach' },
+                { text: 'Holiday Approvals', icon: 'mdi-calendar-check' }
+              ];
+            } else if (role === 'Employee') {
+              this.menuItems = [
+                { text: 'Dashboard', icon: 'mdi-home' },
+                { text: 'My Shifts', icon: 'mdi-calendar-check' },
+                { text: 'Invoices', icon: 'mdi-cash' },
+                {
+                  text: isPermanent ? 'My Holidays' : 'My Availability',
+                  icon: isPermanent ? 'mdi-beach' : 'mdi-calendar-account'
+                }
+              ];
+            } else if (role === 'CFO') {
+              this.menuItems = [
+                { text: 'Dashboard', icon: 'mdi-finance' },
+                { text: 'Reports', icon: 'mdi-chart-bar' },
+                { text: 'Invoices', icon: 'mdi-currency-usd' }
+              ];
+            } else {
+              this.menuItems = [{ text: 'Dashboard', icon: 'mdi-alert' }];
             }
+          },
+          navigate(item) {
+            const viewKey = item.text.toLowerCase().replace(/\s+/g, '');
+            this.view = viewKey;
+
+            switch (viewKey) {
+              case 'users':
+                this.fetchAllUsers();
+                break;
+              case 'myshifts':
+                this.loadMyShifts();
+                break;
+              case 'teamshifts':
+                this.fetchTeamShifts();
+                break;
+              case 'myinvoices':
+                this.fetchMyInvoices();
+                break;
+              case 'departmentinvoices':
+                this.fetchDepartmentInvoices();
+                break;
+              case 'myholidays':
+                this.loadHolidayCalendar();
+                break;
+              case 'myavailability':
+                this.loadAvailabilityCalendar();
+                break;
+              case 'holidayapprovals':
+                this.fetchHolidayApprovals();
+                this.loadTeamHolidayCalendar();
+                break;
+              default:
+                break;
+            }
+          },
+          fetchAllUsers() {
+            const self = this;
+            google.script.run
+              .withSuccessHandler(res => {
+                if (Array.isArray(res)) {
+                  self.users = res;
+                } else {
+                  self.showSnackbar('Failed to fetch users', 'error');
+                }
+              })
+              .withFailureHandler(err => {
+                self.showSnackbar('⚠️ Script error: ' + err.message, 'error');
+              })
+              .getAllUsers();
+          },
+          createUser() {
+            const formatDate = (date) => {
+              if (!date) return '';
+              return typeof date === 'string' ? date : new Date(date).toISOString();
+            };
+
+            const payload = {
+              ...this.newUser,
+              DateOfBirth: formatDate(this.newUser.DateOfBirth),
+              Avatar: this.newUser.Avatar?.url || this.newUser.Avatar || '',
+              CreatedAt: this.dialogMode === 'edit' ? this.newUser.CreatedAt : new Date().toISOString(),
+              UpdatedAt: new Date().toISOString(),
+              BankDetailsConfirmation: !!this.newUser.BankDetailsConfirmation
+            };
+
+            const runner = google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.dialog = false;
+                  this.fetchAllUsers?.();
+                  this.showSnackbar(`✅ User ${this.dialogMode === 'edit' ? 'updated' : 'created'} successfully!`, 'success');
+                  this.resetForm();
+                } else {
+                  this.showSnackbar(`❌ Failed to ${this.dialogMode === 'edit' ? 'update' : 'create'} user: ` + res.error, 'error');
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar(`⚠️ Script error: ${err.message}`, 'error');
+              });
+
+            if (this.dialogMode === 'edit') {
+              runner.updateUser(payload);
+            } else {
+              runner.createUser(payload);
+            }
+          },
+          resetForm() {
+            this.newUser = {
+              FirstName: '',
+              LastName: '',
+              Email: '',
+              DateOfBirth: '',
+              MobileNumber: '',
+              Role: '',
+              Department: '',
+              HourlyRate: '',
+              HolidayEntitlementAccruedHours: '',
+              EmergencyContactName: '',
+              EmergencyContactPhone: '',
+              HealthConditions: '',
+              Medication: '',
+              BankDetailsConfirmation: false,
+              DBSDetails: '',
+              FirstAidQualifications: '',
+              AccountStatus: 'Active',
+              Avatar: ''
+            };
+          },
+          editUser(user) {
+            this.newUser = { ...user };
+            this.dialogMode = 'edit';
+            this.dialog = true;
+          },
+          viewUser(user) {
+            this.newUser = { ...user };
+            this.dialogMode = 'view';
+            this.dialog = true;
+          },
+          createUserDialog() {
+            this.resetForm();
+            this.dialogMode = 'create';
+            this.dialog = true;
+          },
+          confirmDeleteUser(user) {
+            if (confirm(`Are you sure you want to delete ${user.FirstName} ${user.LastName}?`)) {
+              this.deleteUser(user.UserID);
+            }
+          },
+          deleteUser(userId) {
+            google.script.run
+              .withSuccessHandler(() => {
+                this.showSnackbar("✅ User deleted", "success");
+                this.fetchAllUsers();
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ Delete failed: " + err.message, "error");
+              })
+              .deleteUserById(userId);
+          },
+          toggleAccountStatus(user) {
+            const newStatus = user.AccountStatus === 'Active' ? 'Disabled' : 'Active';
+            const updatedUser = {
+              ...user,
+              AccountStatus: newStatus,
+              UpdatedAt: new Date().toISOString()
+            };
 
             google.script.run
               .withSuccessHandler((res) => {
                 if (res.success) {
-                  this.showSnackbar("✅ Shift marked complete", "success");
-                  this.shiftActionDialog = false;
+                  this.showSnackbar(`✔️ Account status changed to ${newStatus}`, 'success');
+                  this.fetchAllUsers();
+                } else {
+                  this.showSnackbar(`❌ Failed to update user status: ${res.error}`, 'error');
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar(`⚠️ Script error: ${err.message}`, 'error');
+              })
+              .updateUser(updatedUser);
+          },
+          openCreateShiftDialog() {
+            google.script.run
+              .withSuccessHandler((res) => {
+                this.availableEmployees = res;
+                this.newShift = {
+                  ShiftDate: '',
+                  StartTime: '',
+                  EndTime: '',
+                  ShiftType: '',
+                  Description: '',
+                  SelectedEmployees: []
+                };
+                this.createShiftDialog = true;
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("❌ Failed to load employees: " + err.message, "error");
+              })
+              .getEligibleEmployeesForShift(this.user.Department);
+          },
+          submitNewShift() {
+            const payload = {
+              ...this.newShift,
+              Department: this.user.Department
+            };
+
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.showSnackbar("✅ Shift(s) created", "success");
+                  this.createShiftDialog = false;
+                  this.fetchTeamShifts();
+                } else {
+                  this.showSnackbar("❌ " + res.error, "error");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ Failed to create shift: " + err.message, "error");
+              })
+              .createShiftForEmployees(payload);
+          },
+          openShiftActionDialog(shift) {
+            this.selectedShift = shift;
+            this.shiftActionStep = 1;
+            this.shiftActionType = '';
+            this.declineReason = '';
+            this.actualHours = '';
+            this.shiftActionDialog = true;
+          },
+
+          chooseAction(type) {
+            this.shiftActionType = type;
+            this.shiftActionStep = 2;
+          },
+
+          submitShiftAction() {
+            const shift = this.selectedShift;
+            if (!shift) return;
+
+            if (this.shiftActionType === 'complete') {
+              const hours = parseFloat(this.actualHours);
+              if (isNaN(hours)) {
+                this.showSnackbar("⚠️ Enter valid hours.", "warning");
+                return;
+              }
+
+              google.script.run
+                .withSuccessHandler((res) => {
+                  if (res.success) {
+                    this.showSnackbar("✅ Shift marked complete", "success");
+                    this.shiftActionDialog = false;
+                    this.loadMyShifts();
+                  } else {
+                    this.showSnackbar("❌ " + res.error, "error");
+                  }
+                })
+                .withFailureHandler(err => {
+                  this.showSnackbar("❌ " + err.message, "error");
+                })
+                .markShiftComplete(this.user.UserID, shift.ShiftID, hours);
+
+            } else if (this.shiftActionType === 'decline') {
+              if (!this.declineReason.trim()) {
+                this.showSnackbar("⚠️ Please enter a reason", "warning");
+                return;
+              }
+
+              google.script.run
+                .withSuccessHandler((res) => {
+                  if (res.success) {
+                    this.showSnackbar("❌ Shift declined", "warning");
+                    this.shiftActionDialog = false;
+                    this.loadMyShifts();
+                  } else {
+                    this.showSnackbar("❌ " + res.error, "error");
+                  }
+                })
+                .withFailureHandler(err => {
+                  this.showSnackbar("❌ " + err.message, "error");
+                })
+                .declineShift(shift.ShiftID, this.declineReason);
+            }
+          },
+          loadMyShifts() {
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (!res || typeof res !== 'object') {
+                  console.warn("⚠️ Invalid response from getEmployeeShifts:", res);
+                  this.showSnackbar("⚠️ Could not load shifts. Try again.", "warning");
+                  return;
+                }
+
+                const formatShifts = (shifts) =>
+                  shifts.map(shift => ({
+                    ...shift,
+                    'shift-id': shift.ShiftID || '',
+                    'shift-date': this.formatDate(shift.ShiftDate),
+                    'start-time': shift.StartTime,
+                    'end-time': shift.EndTime,
+                    'shift-type': shift.ShiftType,
+                    'department': shift.Department,
+                    'status': shift.Status,
+                    'assigned-to': shift.AssignedUserID || '',
+                    'assigned-full-name': shift.AssignedFullName || '',
+                    'actual-hours-worked': shift.ActualHoursWorked || '',
+                    'declined-reason': shift.DeclinedReason || '',
+                    'accepted-timestamp': this.formatDate(shift.AcceptedTimestamp),
+                    'completed-timestamp': this.formatDate(shift.CompletedTimestamp),
+                    'created-at': this.formatDate(shift.CreatedAt),
+                    'updated-at': this.formatDate(shift.UpdatedAt)
+                  }));
+
+                const formattedAvailable = formatShifts(res.available || []);
+                const formattedAssigned = formatShifts(res.assigned || []);
+
+                // ✅ Assign correctly based on status
+                this.offeredShifts = formattedAvailable.filter(s =>
+                  s.status === 'Offered' || s.status === 'Declined'
+                );
+
+                this.assignedShifts = formattedAssigned.filter(s =>
+                  ['Accepted', 'Completed', 'Declined'].includes(s.status)
+                );
+
+                console.log("📦 Offered shifts:", this.offeredShifts);
+                console.log("📦 Assigned shifts:", this.assignedShifts);
+              })
+              .withFailureHandler((err) => {
+                console.error("❌ Failed to load shifts:", err.message);
+                this.showSnackbar("❌ Failed to load shifts: " + err.message, "error");
+              })
+              .getEmployeeShifts();
+          },
+          acceptShift(shift) {
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.showSnackbar("✅ Shift accepted", "success");
                   this.loadMyShifts();
                 } else {
                   this.showSnackbar("❌ " + res.error, "error");
                 }
               })
               .withFailureHandler(err => {
-                this.showSnackbar("❌ " + err.message, "error");
+                this.showSnackbar("❌ Error accepting shift: " + err.message, "error");
               })
-              .markShiftComplete(this.user.UserID, shift.ShiftID, hours);
+              .acceptShift(shift.ShiftID);
+          },
+          openCompleteDialog(shift) {
+            this.selectedShift = shift;
+            this.actualHours = shift.ActualHoursWorked || '';
+            this.completeDialog = true;
+          },
+          submitCompletion() {
+            const shiftId = this.selectedShift?.ShiftID;
+            const hours = parseFloat(this.actualHours);
+            if (!shiftId || isNaN(hours)) {
+              this.showSnackbar("⚠️ Enter valid hours.", "warning");
+              return;
+            }
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.showSnackbar("✅ Shift marked complete", "success");
+                  this.completeDialog = false;
+                  this.loadMyShifts();
+                } else {
+                  this.showSnackbar("❌ " + res.error, "error");
+                }
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("❌ Error: " + err.message, "error");
+              })
+              .markShiftComplete(shiftId, hours);
+          },
+          fetchMyInvoices() {
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (Array.isArray(res)) {
+                  this.myInvoices = res;
+                } else {
+                  this.showSnackbar("❌ Failed to load invoices", "error");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("⚠️ Script error: " + err.message, "error");
+              })
+              .getMyInvoices();
+          },
+          fetchTeamShifts() {
+            google.script.run
+              .withSuccessHandler((res) => {
+                const formatShifts = (shifts) =>
+                  shifts.map(shift => ({
+                    ...shift,
+                    'shift-id': shift.ShiftID,
+                    'shift-date': this.formatDate(shift.ShiftDate),
+                    'start-time': shift.StartTime,
+                    'end-time': shift.EndTime,
+                    'shift-type': shift.ShiftType,
+                    'department': shift.Department,
+                    'status': shift.Status,
+                    'assigned-to': shift.AssignedUserID || '',
+                    'assigned-full-name': shift.AssignedFullName || '',
+                    'actual-hours-worked': shift.ActualHoursWorked || '',
+                    'declined-reason': shift.DeclinedReason || '',
+                    'created-at': this.formatDate(shift.CreatedAt),
+                    'updated-at': this.formatDate(shift.UpdatedAt)
+                  }));
 
-          } else if (this.shiftActionType === 'decline') {
+                this.teamShifts = Array.isArray(res) ? formatShifts(res) : [];
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ Failed to fetch team shifts: " + err.message, "error");
+              })
+              .getShiftsForManager();
+          },
+          submitInvoice(invoiceId) {
+            if (!invoiceId) return;
+            if (!confirm("Submit this invoice for approval?")) return;
+
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.showSnackbar("✅ Invoice submitted", "success");
+                  this.fetchMyInvoices();
+                } else {
+                  this.showSnackbar("❌ Failed to submit invoice", "error");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("⚠️ Script error: " + err.message, "error");
+              })
+              .submitInvoice(invoiceId);
+          },
+          declineShift(shift) {
+            this.selectedShift = shift;
+            this.declineReason = '';
+            this.declineDialog = true;
+          },
+          confirmDeclineShift() {
             if (!this.declineReason.trim()) {
-              this.showSnackbar("⚠️ Please enter a reason", "warning");
+              this.showSnackbar("❗Please provide a reason", "warning");
               return;
             }
 
@@ -1443,412 +1879,516 @@
               .withSuccessHandler((res) => {
                 if (res.success) {
                   this.showSnackbar("❌ Shift declined", "warning");
-                  this.shiftActionDialog = false;
                   this.loadMyShifts();
+                  this.declineDialog = false;
                 } else {
-                  this.showSnackbar("❌ " + res.error, "error");
+                  this.showSnackbar("⚠️ " + res.error, "error");
                 }
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("⚠️ Script error: " + err.message, "error");
+              })
+              .declineShift(this.selectedShift.ShiftID, this.declineReason);
+          },
+          splitShiftIds(idsString) {
+            if (!idsString) return [];
+            return idsString.split(',').map(id => id.trim());
+          },
+          statusColor(status) {
+            switch (status) {
+              case 'Draft': return 'grey';
+              case 'Submitted': return 'blue';
+              case 'ManagerApproved': return 'green';
+              case 'CFOApproved': return 'teal';
+              case 'Paid': return 'purple';
+              case 'Rejected': return 'red';
+              case 'Completed': return 'green';
+              case 'Offered': return 'amber';
+              case 'Declined': return 'red';
+              case 'Accepted': return 'blue';
+              default: return 'grey';
+            }
+          },
+          actionIcon(status) {
+            switch (status) {
+              case 'Offered': return 'mdi-help-circle';
+              case 'Accepted': return 'mdi-thumb-up';
+              case 'Completed': return 'mdi-check-circle';
+              default: return 'mdi-alert';
+            }
+          },
+          actionIconColor(status) {
+            switch (status) {
+              case 'Offered': return 'orange';
+              case 'Accepted': return 'blue';
+              case 'Completed': return 'green';
+              default: return 'grey';
+            }
+          },
+          openInvoiceBasic(invoice) {
+            this.selectedInvoice = invoice;
+            this.viewInvoiceDialog = true;
+          },
+          viewInvoice(item) {
+            this.previewInvoice = item;
+            this.previewInvoiceItems = [];
+
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (Array.isArray(res)) {
+                  this.previewInvoiceItems = res;
+                  this.previewInvoiceDialog = true;
+                } else {
+                  this.showSnackbar("❌ Could not load invoice items", "error");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("⚠️ Script error: " + err.message, "error");
+              })
+              .getInvoiceItemsByInvoiceId(item.InvoiceID);
+          },
+          openCreateInvoiceDialog() {
+            this.resetInvoiceForm();
+            this.createInvoiceDialog = true;
+          },
+          openNewInvoiceDialog() {
+            this.manualInvoice = {
+              InvoiceType: '',
+              DescriptionOrPurpose: '',
+              TotalAmount: '',
+              file: null
+            };
+            this.newInvoiceDialog = true;
+          },
+          saveManualInvoice() {
+            const invoiceData = {
+              InvoiceType: this.manualInvoice.InvoiceType,
+              DescriptionOrPurpose: this.manualInvoice.DescriptionOrPurpose,
+              TotalAmount: parseFloat(this.manualInvoice.TotalAmount),
+              FileBase64: '' // Optional: implement upload logic
+            };
+
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.showSnackbar('✅ Manual invoice saved');
+                  this.newInvoiceDialog = false;
+                  this.fetchMyInvoices();
+                } else {
+                  this.showSnackbar('❌ ' + res.error, 'error');
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar('⚠️ Script error: ' + err.message, 'error');
+              })
+              .createManualInvoice(invoiceData);
+          },
+          fetchDepartmentInvoices() {
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (Array.isArray(res)) {
+                  this.departmentInvoices = res;
+                } else {
+                  this.showSnackbar("❌ Failed to load department invoices", "error");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("⚠️ Script error: " + err.message, "error");
+              })
+              .getDepartmentInvoicesForApproval();
+          },
+          approveInvoice(item) {
+            google.script.run
+              .withSuccessHandler(() => {
+                this.showSnackbar("✅ Invoice approved");
+                this.fetchDepartmentInvoices();
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ " + err.message, "error");
+              })
+              .approveOrRejectInvoice(item.InvoiceID, "approve", "");
+          },
+          rejectInvoice(item) {
+            const reason = prompt("Enter reason for rejection:");
+            if (!reason) return;
+
+            google.script.run
+              .withSuccessHandler(() => {
+                this.showSnackbar("❌ Invoice rejected");
+                this.fetchDepartmentInvoices();
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("⚠️ " + err.message, "error");
+              })
+              .approveOrRejectInvoice(item.InvoiceID, "reject", reason);
+          },
+          resetInvoiceForm() {
+            this.newInvoice = {
+              InvoiceType: '',
+              InvoiceDate: '',
+              TotalAmount: '',
+              DescriptionOrPurpose: ''
+            };
+            this.invoiceDateMenu = false;
+          },
+          submitManualInvoice() {
+            const payload = {
+              ...this.newInvoice,
+              InvoiceDate: this.newInvoice.InvoiceDate || new Date().toISOString().split('T')[0],
+              TotalAmount: parseFloat(this.newInvoice.TotalAmount) || 0,
+              Status: 'Draft',
+              CreatedAt: new Date().toISOString(),
+              UpdatedAt: new Date().toISOString()
+            };
+
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.createInvoiceDialog = false;
+                  this.fetchMyInvoices?.();
+                  this.showSnackbar("✅ Invoice created as Draft", "success");
+                  this.resetInvoiceForm();
+                } else {
+                  this.showSnackbar("❌ Failed to create invoice: " + res.error, "error");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("⚠️ Script error: " + err.message, "error");
+              })
+              .createManualInvoice(payload);
+          },
+          confirmDeleteInvoice(invoice) {
+            if (confirm(`Delete invoice created on ${invoice.InvoiceDate}?`)) {
+              this.deleteInvoice(invoice.InvoiceID);
+            }
+          },
+          deleteInvoice(id) {
+            google.script.run
+              .withSuccessHandler(() => {
+                this.showSnackbar("✅ Invoice deleted", "success");
+                this.fetchMyInvoices();
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ Delete failed: " + err.message, "error");
+              })
+              .deleteInvoiceById(id);
+          },
+          loadAvailabilityCalendar() {
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (!Array.isArray(res)) return;
+                const events = res.map(item => ({
+                  start: new Date(item.StartDate),
+                  end: new Date(item.EndDate),
+                  title: item.Reason || "Not Available",
+                  color: 'red'
+                }));
+                this.availabilityEvents = events;
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("❌ Failed to load availability: " + err.message, "error");
+              })
+              .getMyAvailability(); // 👈 You need to create this GAS function
+          },
+          async submitHoliday() {
+            try {
+              const event = {
+                summary: "Holiday",
+                description: this.newHoliday.Reason,
+                start: {
+                  date: this.newHoliday.StartDate
+                },
+                end: {
+                  date: this.newHoliday.EndDate
+                },
+                extendedProperties: {
+                  private: {
+                    status: "Pending",
+                    userEmail: this.user.Email
+                  }
+                }
+              };
+
+              const res = await gapi.client.calendar.events.insert({
+                calendarId: 'your_shared_calendar_id@group.calendar.google.com',
+                resource: event
+              });
+
+              this.showSnackbar("✅ Holiday submitted to Google Calendar");
+              this.requestHolidayDialog = false;
+              this.loadSharedCalendar(); // or re-fetch your events
+
+            } catch (err) {
+              this.showSnackbar("❌ Failed to submit holiday: " + err.message, "error");
+            }
+          },
+          async submitAvailability() {
+            try {
+              const event = {
+                summary: "Unavailable",
+                description: this.newAvailability.Reason,
+                start: {
+                  date: this.newAvailability.StartDate
+                },
+                end: {
+                  date: this.newAvailability.EndDate
+                },
+                extendedProperties: {
+                  private: {
+                    type: "availability",
+                    userEmail: this.user.Email
+                  }
+                }
+              };
+
+              const res = await gapi.client.calendar.events.insert({
+                calendarId: 'your_shared_calendar_id@group.calendar.google.com',
+                resource: event
+              });
+
+              this.showSnackbar("✅ Unavailable time added to Calendar");
+              this.requestAvailabilityDialog = false;
+              this.loadSharedCalendar(); // or loadAvailabilityCalendar()
+
+            } catch (err) {
+              this.showSnackbar("❌ Failed to submit availability: " + err.message, "error");
+            }
+          },
+          openHolidayRequestDialog() {
+            this.newHoliday = {
+              StartDate: '',
+              EndDate: '',
+              StartType: 'Full',
+              EndType: 'Full',
+              Reason: ''
+            };
+            this.requestHolidayDialog = true;
+          },
+          openAvailabilityDialog() {
+            this.newAvailability = {
+              StartDate: '',
+              EndDate: '',
+              Reason: '',
+              Repeat: 'None'
+            };
+            this.requestAvailabilityDialog = true;
+          },
+          fetchHolidayApprovals() {
+            google.script.run
+              .withSuccessHandler(res => {
+                this.pendingHolidayRequests = Array.isArray(res) ? res : [];
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("❌ Failed to load holiday requests: " + err.message, "error");
+              })
+              .getPendingHolidayRequestsForManager();
+          },
+          approveHoliday(item) {
+            google.script.run
+              .withSuccessHandler(() => {
+                this.showSnackbar("✅ Approved");
+                this.fetchHolidayApprovals();
+                this.loadTeamHolidayCalendar();
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("❌ Error: " + err.message, "error");
+              })
+              .approveOrRejectHoliday(item.HolidayRequestID, "approve", "");
+          },
+          rejectHoliday(item) {
+            const reason = prompt("Enter reason for rejection:");
+            if (!reason) return;
+
+            google.script.run
+              .withSuccessHandler(() => {
+                this.showSnackbar("❌ Rejected");
+                this.fetchHolidayApprovals();
               })
               .withFailureHandler(err => {
                 this.showSnackbar("❌ " + err.message, "error");
               })
-              .declineShift(shift.ShiftID, this.declineReason);
-          }
-        },
-        loadMyShifts() {
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (!res || typeof res !== 'object') {
-                console.warn("⚠️ Invalid response from getEmployeeShifts:", res);
-                this.showSnackbar("⚠️ Could not load shifts. Try again.", "warning");
-                return;
-              }
+              .approveOrRejectHoliday(item.HolidayRequestID, "reject", reason);
+          },
+          initGoogleCalendarAPI() {
+            const API_KEY = 'removed.for.seccirity';
+            const CLIENT_ID = 'removed.for.seccirity.apps.googleusercontent.com';
+            const SCOPES = 'https://www.googleapis.com/auth/calendar';
 
-              const formatShifts = (shifts) =>
-                shifts.map(shift => ({
-                  ...shift,
-                  'shift-id': shift.ShiftID || '',
-                  'shift-date': this.formatDate(shift.ShiftDate),
-                  'start-time': shift.StartTime,
-                  'end-time': shift.EndTime,
-                  'shift-type': shift.ShiftType,
-                  'department': shift.Department,
-                  'status': shift.Status,
-                  'assigned-to': shift.AssignedUserID || '',
-                  'assigned-full-name': shift.AssignedFullName || '',
-                  'actual-hours-worked': shift.ActualHoursWorked || '',
-                  'declined-reason': shift.DeclinedReason || '',
-                  'accepted-timestamp': this.formatDate(shift.AcceptedTimestamp),
-                  'completed-timestamp': this.formatDate(shift.CompletedTimestamp),
-                  'created-at': this.formatDate(shift.CreatedAt),
-                  'updated-at': this.formatDate(shift.UpdatedAt)
+            gapi.load('client:auth2', async () => {
+              try {
+                await gapi.client.init({
+                  apiKey: API_KEY,
+                  clientId: CLIENT_ID,
+                  discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+                  scope: SCOPES
+                });
+
+                const isSignedIn = gapi.auth2.getAuthInstance().isSignedIn.get();
+                if (!isSignedIn) {
+                  await gapi.auth2.getAuthInstance().signIn();
+                }
+
+                this.fetchGoogleCalendarEvents();
+
+              } catch (err) {
+                this.showSnackbar("❌ Google API init failed: " + err.message, "error");
+              }
+            });
+          },
+          async fetchGoogleCalendarEvents() {
+            try {
+              const now = new Date().toISOString();
+              const res = await gapi.client.calendar.events.list({
+                calendarId: 'your_shared_calendar_id@group.calendar.google.com',
+                timeMin: now,
+                showDeleted: false,
+                singleEvents: true,
+                maxResults: 100,
+                orderBy: 'startTime',
+                q: 'Holiday'
+              });
+
+              this.googleHolidayEvents = res.result.items || [];
+              this.holidaysTaken = this.googleHolidayEvents.length;
+              this.holidayRemaining = this.HOLIDAY_ENTITLEMENT - this.holidaysTaken;
+
+            } catch (err) {
+              this.showSnackbar("❌ Failed to fetch events: " + err.message, "error");
+            }
+          },
+          async loadSharedCalendar() {
+            try {
+              const now = new Date().toISOString();
+              const res = await gapi.client.calendar.events.list({
+                calendarId: 'your_shared_calendar_id@group.calendar.google.com',
+                timeMin: now,
+                showDeleted: false,
+                singleEvents: true,
+                maxResults: 100,
+                orderBy: 'startTime'
+              });
+
+              this.teamHolidayEvents = res.result.items || [];
+
+            } catch (err) {
+              this.showSnackbar("❌ Could not load shared calendar: " + err.message, "error");
+            }
+          },
+          fetchAvailabilityBlocks() {
+            gapi.client.calendar.events.list({
+              calendarId: 'primary',
+              q: 'Unavailable',
+              timeMin: new Date().toISOString(),
+              showDeleted: false,
+              singleEvents: true,
+              maxResults: 50,
+              orderBy: 'startTime'
+            }).then(res => {
+              this.unavailableDates = res.result.items;
+            });
+          },
+
+          loadTeamHolidayCalendar() {
+            google.script.run
+              .withSuccessHandler(res => {
+                if (!Array.isArray(res)) return;
+                this.teamHolidayEvents = res.map(item => ({
+                  start: new Date(item.StartDate),
+                  end: new Date(item.EndDate),
+                  title: `${item.FullName} (${item.Status})`,
+                  color: item.Status === 'Approved' ? 'green' :
+                        item.Status === 'Rejected' ? 'red' : 'orange'
                 }));
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("❌ Failed to load team holidays: " + err.message, "error");
+              })
+              .getTeamHolidayCalendar(); // 👈 You must add this in GAS
+          },
+          promptRejectHoliday(item) {
+            this.rejectTarget = item;
+            this.rejectionReason = '';
+            this.rejectDialogVisible = true;
+          },
+          async confirmRejectHoliday() {
+            if (!this.rejectionReason.trim()) {
+              this.showSnackbar("❗Please enter a reason", "warning");
+              return;
+            }
 
-              const formattedAvailable = formatShifts(res.available || []);
-              const formattedAssigned = formatShifts(res.assigned || []);
+            try {
+              const calendarId = 'your_shared_calendar_id@group.calendar.google.com';
+              const eventId = this.rejectTarget.EventID;
 
-              // ✅ Assign correctly based on status
-              this.offeredShifts = formattedAvailable.filter(s =>
-                s.status === 'Offered' || s.status === 'Declined'
-              );
+              const res = await gapi.client.calendar.events.get({ calendarId, eventId });
+              const event = res.result;
+              event.extendedProperties = event.extendedProperties || { private: {} };
+              event.extendedProperties.private.status = 'Rejected';
+              event.description += `\n\n[REJECTED] ${this.rejectionReason}`;
 
-              this.assignedShifts = formattedAssigned.filter(s =>
-                ['Accepted', 'Completed', 'Declined'].includes(s.status)
-              );
+              await gapi.client.calendar.events.update({
+                calendarId,
+                eventId,
+                resource: event
+              });
 
-              console.log("📦 Offered shifts:", this.offeredShifts);
-              console.log("📦 Assigned shifts:", this.assignedShifts);
-            })
-            .withFailureHandler((err) => {
-              console.error("❌ Failed to load shifts:", err.message);
-              this.showSnackbar("❌ Failed to load shifts: " + err.message, "error");
-            })
-            .getEmployeeShifts();
-        },
-        acceptShift(shift) {
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (res.success) {
-                this.showSnackbar("✅ Shift accepted", "success");
-                this.loadMyShifts();
-              } else {
-                this.showSnackbar("❌ " + res.error, "error");
-              }
-            })
-            .withFailureHandler(err => {
-              this.showSnackbar("❌ Error accepting shift: " + err.message, "error");
-            })
-            .acceptShift(shift.ShiftID);
-        },
-        openCompleteDialog(shift) {
-          this.selectedShift = shift;
-          this.actualHours = shift.ActualHoursWorked || '';
-          this.completeDialog = true;
-        },
-        submitCompletion() {
-          const shiftId = this.selectedShift?.ShiftID;
-          const hours = parseFloat(this.actualHours);
-          if (!shiftId || isNaN(hours)) {
-            this.showSnackbar("⚠️ Enter valid hours.", "warning");
-            return;
-          }
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (res.success) {
-                this.showSnackbar("✅ Shift marked complete", "success");
-                this.completeDialog = false;
-                this.loadMyShifts();
-              } else {
-                this.showSnackbar("❌ " + res.error, "error");
-              }
-            })
-            .withFailureHandler(err => {
-              this.showSnackbar("❌ Error: " + err.message, "error");
-            })
-            .markShiftComplete(shiftId, hours);
-        },
-        fetchMyInvoices() {
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (Array.isArray(res)) {
-                this.myInvoices = res;
-              } else {
-                this.showSnackbar("❌ Failed to load invoices", "error");
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("⚠️ Script error: " + err.message, "error");
-            })
-            .getMyInvoices();
-        },
-        fetchTeamShifts() {
-          google.script.run
-            .withSuccessHandler((res) => {
-              const formatShifts = (shifts) =>
-                shifts.map(shift => ({
-                  ...shift,
-                  'shift-id': shift.ShiftID,
-                  'shift-date': this.formatDate(shift.ShiftDate),
-                  'start-time': shift.StartTime,
-                  'end-time': shift.EndTime,
-                  'shift-type': shift.ShiftType,
-                  'department': shift.Department,
-                  'status': shift.Status,
-                  'assigned-to': shift.AssignedUserID || '',
-                  'assigned-full-name': shift.AssignedFullName || '',
-                  'actual-hours-worked': shift.ActualHoursWorked || '',
-                  'declined-reason': shift.DeclinedReason || '',
-                  'created-at': this.formatDate(shift.CreatedAt),
-                  'updated-at': this.formatDate(shift.UpdatedAt)
-                }));
+              this.showSnackbar("❌ Holiday request rejected");
+              this.rejectDialogVisible = false;
+              this.loadSharedCalendar();
 
-              this.teamShifts = Array.isArray(res) ? formatShifts(res) : [];
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("❌ Failed to fetch team shifts: " + err.message, "error");
-            })
-            .getShiftsForManager();
-        },
-        submitInvoice(invoiceId) {
-          if (!invoiceId) return;
-          if (!confirm("Submit this invoice for approval?")) return;
-
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (res.success) {
-                this.showSnackbar("✅ Invoice submitted", "success");
-                this.fetchMyInvoices();
-              } else {
-                this.showSnackbar("❌ Failed to submit invoice", "error");
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("⚠️ Script error: " + err.message, "error");
-            })
-            .submitInvoice(invoiceId);
-        },
-        declineShift(shift) {
-          this.selectedShift = shift;
-          this.declineReason = '';
-          this.declineDialog = true;
-        },
-        confirmDeclineShift() {
-          if (!this.declineReason.trim()) {
-            this.showSnackbar("❗Please provide a reason", "warning");
-            return;
-          }
-
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (res.success) {
-                this.showSnackbar("❌ Shift declined", "warning");
-                this.loadMyShifts();
-                this.declineDialog = false;
-              } else {
-                this.showSnackbar("⚠️ " + res.error, "error");
-              }
-            })
-            .withFailureHandler(err => {
-              this.showSnackbar("⚠️ Script error: " + err.message, "error");
-            })
-            .declineShift(this.selectedShift.ShiftID, this.declineReason);
-        },
-        splitShiftIds(idsString) {
-          if (!idsString) return [];
-          return idsString.split(',').map(id => id.trim());
-        },
-        statusColor(status) {
-          switch (status) {
-            case 'Draft': return 'grey';
-            case 'Submitted': return 'blue';
-            case 'ManagerApproved': return 'green';
-            case 'CFOApproved': return 'teal';
-            case 'Paid': return 'purple';
-            case 'Rejected': return 'red';
-            case 'Completed': return 'green';
-            case 'Offered': return 'amber';
-            case 'Declined': return 'red';
-            case 'Accepted': return 'blue';
-            default: return 'grey';
+            } catch (err) {
+              this.showSnackbar("❌ Error rejecting event: " + err.message, "error");
+            }
+          },
+          formatDate(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            return d.toLocaleDateString('en-GB');
+          },
+          formatTime(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+          },
+          showSnackbar(message, color = 'success') {
+            this.snackbar.message = message;
+            this.snackbar.color = color;
+            this.snackbar.show = true;
+          },
+          logout() {
+            this.user = {
+              FirstName: '',
+              LastName: '',
+              Email: '',
+              Role: '',
+              Department: '',
+              Avatar: ''
+            };
+            this.view = 'dashboard';
+            this.menuItems = [];
+            this.showSnackbar("🚪 Logged out", "info");
           }
         },
-        actionIcon(status) {
-          switch (status) {
-            case 'Offered': return 'mdi-help-circle';
-            case 'Accepted': return 'mdi-thumb-up';
-            case 'Completed': return 'mdi-check-circle';
-            default: return 'mdi-alert';
+        computed: {
+          daysTaken() {
+            return this.holidaysTaken;
+          },
+          daysRemaining() {
+            return this.holidayRemaining;
+          },
+          formattedUnavailable() {
+            return this.unavailableDates.map(ev => ({
+              title: ev.summary || "Unavailable",
+              start: ev.start.date || ev.start.dateTime,
+              end: ev.end.date || ev.end.dateTime
+            }));
           }
         },
-        actionIconColor(status) {
-          switch (status) {
-            case 'Offered': return 'orange';
-            case 'Accepted': return 'blue';
-            case 'Completed': return 'green';
-            default: return 'grey';
-          }
-        },
-        viewInvoice(invoice) {
-          this.selectedInvoice = invoice;
-          this.viewInvoiceDialog = true;
-        },
-        viewInvoice(item) {
-          this.previewInvoice = item;
-          this.previewInvoiceItems = [];
-
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (Array.isArray(res)) {
-                this.previewInvoiceItems = res;
-                this.previewInvoiceDialog = true;
-              } else {
-                this.showSnackbar("❌ Could not load invoice items", "error");
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("⚠️ Script error: " + err.message, "error");
-            })
-            .getInvoiceItemsByInvoiceId(item.InvoiceID);
-        },
-        openCreateInvoiceDialog() {
-          this.resetInvoiceForm();
-          this.createInvoiceDialog = true;
-        },
-        openNewInvoiceDialog() {
-          this.manualInvoice = {
-            InvoiceType: '',
-            DescriptionOrPurpose: '',
-            TotalAmount: '',
-            file: null
-          };
-          this.newInvoiceDialog = true;
-        },
-        saveManualInvoice() {
-          const invoiceData = {
-            InvoiceType: this.manualInvoice.InvoiceType,
-            DescriptionOrPurpose: this.manualInvoice.DescriptionOrPurpose,
-            TotalAmount: parseFloat(this.manualInvoice.TotalAmount),
-            FileBase64: '' // Optional: implement upload logic
-          };
-
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (res.success) {
-                this.showSnackbar('✅ Manual invoice saved');
-                this.newInvoiceDialog = false;
-                this.fetchMyInvoices();
-              } else {
-                this.showSnackbar('❌ ' + res.error, 'error');
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar('⚠️ Script error: ' + err.message, 'error');
-            })
-            .createManualInvoice(invoiceData);
-        },
-        fetchDepartmentInvoices() {
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (Array.isArray(res)) {
-                this.departmentInvoices = res;
-              } else {
-                this.showSnackbar("❌ Failed to load department invoices", "error");
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("⚠️ Script error: " + err.message, "error");
-            })
-            .getDepartmentInvoicesForApproval();
-        },
-        approveInvoice(item) {
-          google.script.run
-            .withSuccessHandler(() => {
-              this.showSnackbar("✅ Invoice approved");
-              this.fetchDepartmentInvoices();
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("❌ " + err.message, "error");
-            })
-            .approveOrRejectInvoice(item.InvoiceID, "approve", "");
-        },
-        rejectInvoice(item) {
-          const reason = prompt("Enter reason for rejection:");
-          if (!reason) return;
-
-          google.script.run
-            .withSuccessHandler(() => {
-              this.showSnackbar("❌ Invoice rejected");
-              this.fetchDepartmentInvoices();
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("⚠️ " + err.message, "error");
-            })
-            .approveOrRejectInvoice(item.InvoiceID, "reject", reason);
-        },
-        resetInvoiceForm() {
-          this.newInvoice = {
-            InvoiceType: '',
-            InvoiceDate: '',
-            TotalAmount: '',
-            DescriptionOrPurpose: ''
-          };
-          this.invoiceDateMenu = false;
-        },
-        submitManualInvoice() {
-          const payload = {
-            ...this.newInvoice,
-            InvoiceDate: this.newInvoice.InvoiceDate || new Date().toISOString().split('T')[0],
-            TotalAmount: parseFloat(this.newInvoice.TotalAmount) || 0,
-            Status: 'Draft',
-            CreatedAt: new Date().toISOString(),
-            UpdatedAt: new Date().toISOString()
-          };
-
-          google.script.run
-            .withSuccessHandler((res) => {
-              if (res.success) {
-                this.createInvoiceDialog = false;
-                this.fetchMyInvoices?.();
-                this.showSnackbar("✅ Invoice created as Draft", "success");
-                this.resetInvoiceForm();
-              } else {
-                this.showSnackbar("❌ Failed to create invoice: " + res.error, "error");
-              }
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("⚠️ Script error: " + err.message, "error");
-            })
-            .createManualInvoice(payload);
-        },
-        confirmDeleteInvoice(invoice) {
-          if (confirm(`Delete invoice created on ${invoice.InvoiceDate}?`)) {
-            this.deleteInvoice(invoice.InvoiceID);
-          }
-        },
-        deleteInvoice(id) {
-          google.script.run
-            .withSuccessHandler(() => {
-              this.showSnackbar("✅ Invoice deleted", "success");
-              this.fetchMyInvoices();
-            })
-            .withFailureHandler((err) => {
-              this.showSnackbar("❌ Delete failed: " + err.message, "error");
-            })
-            .deleteInvoiceById(id);
-        },
-        formatDate(iso) {
-          if (!iso) return '';
-          const d = new Date(iso);
-          return d.toLocaleDateString('en-GB');
-        },
-        formatTime(iso) {
-          if (!iso) return '';
-          const d = new Date(iso);
-          return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-        },
-        showSnackbar(message, color = 'success') {
-          this.snackbar.message = message;
-          this.snackbar.color = color;
-          this.snackbar.show = true;
-        },
-        logout() {
-          this.user = {
-            FirstName: '',
-            LastName: '',
-            Email: '',
-            Role: '',
-            Department: '',
-            Avatar: ''
-          };
-          this.view = 'dashboard';
-          this.menuItems = [];
-          this.showSnackbar("🚪 Logged out", "info");
+        created() {
+          this.tryForceAuth();
+          this.initGoogleCalendarAPI();
         }
-      },
-      created() {
-        this.tryForceAuth();
-      }
-    });
+      });
   </script>
 </body>
 
