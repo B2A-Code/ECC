@@ -23,8 +23,19 @@
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue-apexcharts"></script>
 
-  <!-- ✅ Google Calendar API -->
-  <script async defer src="https://apis.google.com/js/api.js"></script>
+  <!-- ✅ GAPI Loader & Callback -->
+  <script>
+    // Dispatch event when gapi is ready
+    function gapiLoadedCallback() {
+      const event = new Event("gapiLoaded");
+      window.dispatchEvent(event);
+    }
+
+    window.gapiLoadedCallback = gapiLoadedCallback;
+  </script>
+
+  <!-- ✅ Google API script with onload trigger -->
+  <script src="https://apis.google.com/js/api.js?onload=gapiLoadedCallback" async defer></script>
 
   <style>
     html,
@@ -329,100 +340,42 @@
             </v-card-text>
           </v-card>
 
-<!-- 🌴 My Holidays View -->
-<v-card v-if="view === 'myholidays'" class="ma-4 pa-4">
-  <v-card-title>
-    My Holidays
-    <v-spacer></v-spacer>
-    <v-btn color="primary" small @click="openHolidayRequestDialog">Request Holiday</v-btn>
-  </v-card-title>
+          <!-- 🧾 Department Invoices -->
+          <v-card v-if="view === 'departmentinvoices'" class="ma-4 pa-4" elevation="3">
+            <v-card-title>
+              Department Invoices
+              <v-spacer></v-spacer>
+              <v-btn small icon @click="fetchDepartmentInvoices">
+                <v-icon>mdi-refresh</v-icon>
+              </v-btn>
+            </v-card-title>
 
-  <v-row dense>
-    <v-col cols="6">
-      <v-alert border="left" type="info">
-        <strong>Days Remaining:</strong> {{ daysRemaining }}
-      </v-alert>
-    </v-col>
-    <v-col cols="6">
-      <v-alert border="left" type="success">
-        <strong>Days Taken:</strong> {{ daysTaken }}
-      </v-alert>
-    </v-col>
-  </v-row>
+            <v-divider class="my-2"></v-divider>
 
-  <v-list class="mt-3" two-line>
-    <v-list-item v-for="event in googleHolidayEvents" :key="event.id">
-      <v-list-item-content>
-        <v-list-item-title>{{ event.summary }}</v-list-item-title>
-        <v-list-item-subtitle>
-          {{ formatDate(event.start.date || event.start.dateTime) }} - 
-          {{ formatDate(event.end.date || event.end.dateTime) }}
-        </v-list-item-subtitle>
-      </v-list-item-content>
-    </v-list-item>
-  </v-list>
-</v-card>
+            <v-card-text>
+              <v-data-table
+                :headers="invoiceTableHeadersManager"
+                :items="departmentInvoices"
+                item-key="InvoiceID"
+                dense
+                hide-default-footer
+              >
+                <template v-slot:item.actions="{ item }">
+                  <v-btn icon small @click="approveInvoice(item)">
+                    <v-icon color="green">mdi-check</v-icon>
+                  </v-btn>
+                  <v-btn icon small @click="rejectInvoice(item)">
+                    <v-icon color="red">mdi-close</v-icon>
+                  </v-btn>
+                </template>
 
-<!-- 🌴 Holiday Approvals (Manager) -->
-<v-card v-if="view === 'holidayapprovals'" class="ma-4 pa-4">
-  <v-card-title>
-    Team Holidays
-    <v-spacer></v-spacer>
-    <v-btn small icon @click="loadSharedCalendarEvents">
-      <v-icon>mdi-refresh</v-icon>
-    </v-btn>
-  </v-card-title>
-
-  <v-list dense class="mt-3">
-    <v-list-item v-for="event in teamHolidayEvents" :key="event.id">
-      <v-list-item-content>
-        <v-list-item-title>{{ event.summary }}</v-list-item-title>
-        <v-list-item-subtitle>
-          {{ formatDate(event.start.date || event.start.dateTime) }} - 
-          {{ formatDate(event.end.date || event.end.dateTime) }}
-        </v-list-item-subtitle>
-      </v-list-item-content>
-    </v-list-item>
-  </v-list>
-
-  <v-divider class="my-4"></v-divider>
-
-  <v-card-subtitle>Pending Requests (From DB)</v-card-subtitle>
-  <v-data-table
-    :headers="approvalTableHeaders"
-    :items="pendingHolidayRequests"
-    item-key="HolidayRequestID"
-    dense
-    class="elevation-1"
-  >
-    <template v-slot:item.actions="{ item }">
-      <v-btn small color="success" @click="approveHoliday(item)">Approve</v-btn>
-      <v-btn small color="error" @click="promptRejectHoliday(item)">Reject</v-btn>
-    </template>
-  </v-data-table>
-</v-card>
-
-<!-- 📅 My Availability (Contractors) -->
-<v-card v-if="view === 'myavailability'" class="ma-4 pa-4">
-  <v-card-title>
-    My Availability
-    <v-spacer></v-spacer>
-    <v-btn color="error" small @click="openAvailabilityDialog">Add Unavailable Time</v-btn>
-  </v-card-title>
-
-  <v-list class="mt-3">
-    <v-list-item v-for="ev in unavailableDates" :key="ev.id">
-      <v-list-item-content>
-        <v-list-item-title>{{ ev.summary }}</v-list-item-title>
-        <v-list-item-subtitle>
-          {{ formatDate(ev.start.date || ev.start.dateTime) }} - 
-          {{ formatDate(ev.end.date || ev.end.dateTime) }}
-        </v-list-item-subtitle>
-      </v-list-item-content>
-    </v-list-item>
-  </v-list>
-</v-card>
-
+                <template v-slot:no-data>
+                  <v-alert type="info">No invoices pending approval.</v-alert>
+                </template>
+              </v-data-table>
+            </v-card-text>
+          </v-card>
+          
           <!-- 🧾 My Invoices -->
           <v-card v-if="view === 'myinvoices'" class="ma-4 pa-4" elevation="3">
             <v-card-title>
@@ -468,8 +421,99 @@
             </v-card-text>
           </v-card>
 
+          <!-- 🌴 My Holidays View -->
+          <v-card v-if="view === 'myholidays'" class="ma-4 pa-4">
+            <v-card-title>
+              My Holidays
+              <v-spacer></v-spacer>
+              <v-btn color="primary" small @click="openHolidayRequestDialog">Request Holiday</v-btn>
+            </v-card-title>
 
+            <v-row dense>
+              <v-col cols="6">
+                <v-alert border="left" type="info">
+                  <strong>Days Remaining:</strong> {{ daysRemaining }}
+                </v-alert>
+              </v-col>
+              <v-col cols="6">
+                <v-alert border="left" type="success">
+                  <strong>Days Taken:</strong> {{ daysTaken }}
+                </v-alert>
+              </v-col>
+            </v-row>
 
+            <v-list class="mt-3" two-line>
+              <v-list-item v-for="event in googleHolidayEvents" :key="event.id">
+                <v-list-item-content>
+                  <v-list-item-title>{{ event.summary }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{ formatDate(event.start.date || event.start.dateTime) }} - 
+                    {{ formatDate(event.end.date || event.end.dateTime) }}
+                  </v-list-item-subtitle>
+                </v-list-item-content>
+              </v-list-item>
+            </v-list>
+          </v-card>
+
+          <!-- 🌴 Holiday Approvals (Manager) -->
+          <v-card v-if="view === 'holidayapprovals'" class="ma-4 pa-4">
+            <v-card-title>
+              Team Holidays
+              <v-spacer></v-spacer>
+              <v-btn small icon @click="loadSharedCalendarEvents">
+                <v-icon>mdi-refresh</v-icon>
+              </v-btn>
+            </v-card-title>
+
+            <v-list dense class="mt-3">
+              <v-list-item v-for="event in teamHolidayEvents" :key="event.id">
+                <v-list-item-content>
+                  <v-list-item-title>{{ event.summary }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{ formatDate(event.start.date || event.start.dateTime) }} - 
+                    {{ formatDate(event.end.date || event.end.dateTime) }}
+                  </v-list-item-subtitle>
+                </v-list-item-content>
+              </v-list-item>
+            </v-list>
+
+            <v-divider class="my-4"></v-divider>
+
+            <v-card-subtitle>Pending Requests (From DB)</v-card-subtitle>
+            <v-data-table
+              :headers="approvalTableHeaders"
+              :items="pendingHolidayRequests"
+              item-key="HolidayRequestID"
+              dense
+              class="elevation-1"
+            >
+              <template v-slot:item.actions="{ item }">
+                <v-btn small color="success" @click="approveHoliday(item)">Approve</v-btn>
+                <v-btn small color="error" @click="promptRejectHoliday(item)">Reject</v-btn>
+              </template>
+            </v-data-table>
+          </v-card>
+
+          <!-- 📅 My Availability (Contractors) -->
+          <v-card v-if="view === 'myavailability'" class="ma-4 pa-4">
+            <v-card-title>
+              My Availability
+              <v-spacer></v-spacer>
+              <v-btn color="error" small @click="openAvailabilityDialog">Add Unavailable Time</v-btn>
+            </v-card-title>
+
+            <v-list class="mt-3">
+              <v-list-item v-for="ev in unavailableDates" :key="ev.id">
+                <v-list-item-content>
+                  <v-list-item-title>{{ ev.summary }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{ formatDate(ev.start.date || ev.start.dateTime) }} - 
+                    {{ formatDate(ev.end.date || ev.end.dateTime) }}
+                  </v-list-item-subtitle>
+                </v-list-item-content>
+              </v-list-item>
+            </v-list>
+          </v-card>
         </v-container>
 
         <!-- Profile Modal -->
@@ -844,116 +888,6 @@
           </v-card>
         </v-dialog>
 
-        <!-- 🗓 Holiday Request Modal -->
-        <v-dialog v-model="showHolidayRequestDialog" max-width="500px">
-          <v-card>
-            <v-card-title>Request Holiday</v-card-title>
-            <v-card-text>
-              <v-container>
-                <v-row>
-                  <v-col cols="12">
-                    <v-text-field v-model="newHoliday.Reason" label="Reason for holiday" />
-                  </v-col>
-                  <v-col cols="6">
-                    <v-menu ref="startMenu" v-model="startMenu" :close-on-content-click="false">
-                      <template v-slot:activator="{ on, attrs }">
-                        <v-text-field v-model="newHoliday.StartDate" label="Start Date" readonly v-bind="attrs"
-                          v-on="on" />
-                      </template>
-                      <v-date-picker v-model="newHoliday.StartDate" @input="startMenu = false" />
-                    </v-menu>
-                  </v-col>
-                  <v-col cols="6">
-                    <v-select :items="['Full', 'Half']" v-model="newHoliday.StartType" label="Start Type" />
-                  </v-col>
-
-                  <v-col cols="6">
-                    <v-menu ref="endMenu" v-model="endMenu" :close-on-content-click="false">
-                      <template v-slot:activator="{ on, attrs }">
-                        <v-text-field v-model="newHoliday.EndDate" label="End Date" readonly v-bind="attrs" v-on="on" />
-                      </template>
-                      <v-date-picker v-model="newHoliday.EndDate" @input="endMenu = false" />
-                    </v-menu>
-                  </v-col>
-                  <v-col cols="6">
-                    <v-select :items="['Full', 'Half']" v-model="newHoliday.EndType" label="End Type" />
-                  </v-col>
-                </v-row>
-              </v-container>
-            </v-card-text>
-            <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn text @click="requestHolidayDialog = false">Cancel</v-btn>
-              <v-btn color="primary" @click="submitHoliday">Submit</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-
-        <!-- 🗓 Availability Modal -->
-        <v-dialog v-model="requestAvailabilityDialog" max-width="500px">
-          <v-card>
-            <v-card-title>Add Unavailable Time</v-card-title>
-            <v-card-text>
-              <v-container>
-                <v-row>
-                  <v-col cols="12">
-                    <v-text-field v-model="newAvailability.Reason" label="Reason (e.g., holiday, booked)" />
-                  </v-col>
-                  <v-col cols="6">
-                    <v-menu v-model="startUnavailableMenu" :close-on-content-click="false">
-                      <template v-slot:activator="{ on, attrs }">
-                        <v-text-field v-model="newAvailability.StartDate" label="Start Date" readonly v-bind="attrs"
-                          v-on="on" />
-                      </template>
-                      <v-date-picker v-model="newAvailability.StartDate" @input="startUnavailableMenu = false" />
-                    </v-menu>
-                  </v-col>
-                  <v-col cols="6">
-                    <v-menu v-model="endUnavailableMenu" :close-on-content-click="false">
-                      <template v-slot:activator="{ on, attrs }">
-                        <v-text-field v-model="newAvailability.EndDate" label="End Date" readonly v-bind="attrs"
-                          v-on="on" />
-                      </template>
-                      <v-date-picker v-model="newAvailability.EndDate" @input="endUnavailableMenu = false" />
-                    </v-menu>
-                  </v-col>
-                  <v-col cols="12">
-                    <v-select v-model="newAvailability.Repeat" :items="['None', 'Weekly']" label="Repeat" />
-                  </v-col>
-                </v-row>
-              </v-container>
-            </v-card-text>
-            <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn text @click="requestAvailabilityDialog = false">Cancel</v-btn>
-              <v-btn color="error" @click="submitAvailability">Save</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-
-        <!-- ❌ Reject Holiday Dialog -->
-        <v-dialog v-model="rejectDialogVisible" max-width="500px">
-          <v-card>
-            <v-card-title class="headline red--text">
-              Reject Holiday Request
-            </v-card-title>
-            <v-card-text>
-              <p>
-                Reject holiday request for <strong>{{ rejectTarget?.FullName }}</strong> from
-                <strong>{{ formatDate(rejectTarget?.StartDate) }}</strong> to
-                <strong>{{ formatDate(rejectTarget?.EndDate) }}</strong>?
-              </p>
-              <v-textarea v-model="rejectionReason" label="Reason for Rejection" auto-grow outlined required>
-              </v-textarea>
-            </v-card-text>
-            <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn text @click="rejectDialogVisible = false">Cancel</v-btn>
-              <v-btn color="error" @click="confirmRejectHoliday">Reject</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-
         <!-- 🧾 Create Manual Invoice Modal -->
         <v-dialog v-model="createInvoiceDialog" max-width="600px" persistent>
           <v-card>
@@ -1061,41 +995,6 @@
           </v-card>
         </v-dialog>
 
-        <!-- 🧾 Department Invoices -->
-        <v-container v-if="view === 'departmentinvoices'" fluid>
-          <v-row>
-            <v-col cols="12">
-              <v-card class="pa-4" elevation="3">
-                <v-card-title>
-                  Department Invoices
-                  <v-spacer></v-spacer>
-                  <v-btn small icon @click="fetchDepartmentInvoices">
-                    <v-icon>mdi-refresh</v-icon>
-                  </v-btn>
-                </v-card-title>
-
-                <v-divider class="my-2"></v-divider>
-
-                <v-data-table :headers="invoiceTableHeadersManager" :items="departmentInvoices" item-key="InvoiceID"
-                  dense hide-default-footer>
-                  <template v-slot:item.actions="{ item }">
-                    <v-btn icon small @click="approveInvoice(item)">
-                      <v-icon color="green">mdi-check</v-icon>
-                    </v-btn>
-                    <v-btn icon small @click="rejectInvoice(item)">
-                      <v-icon color="red">mdi-close</v-icon>
-                    </v-btn>
-                  </template>
-
-                  <template v-slot:no-data>
-                    <v-alert type="info">No invoices pending approval.</v-alert>
-                  </template>
-                </v-data-table>
-              </v-card>
-            </v-col>
-          </v-row>
-        </v-container>
-
         <!-- 🧾 Create New Invoice Modal -->
         <v-dialog v-model="newInvoiceDialog" max-width="600px">
           <v-card>
@@ -1130,12 +1029,114 @@
           </v-card>
         </v-dialog>
 
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn text @click="createInvoiceDialog = false">Cancel</v-btn>
-          <v-btn color="primary" @click="submitManualInvoice">Submit</v-btn>
-        </v-card-actions>
-        </v-card>
+        <!-- 🗓 Holiday Request Modal -->
+        <v-dialog v-model="showHolidayRequestDialog" max-width="500px">
+          <v-card>
+            <v-card-title>Request Holiday</v-card-title>
+            <v-card-text>
+              <v-container>
+                <v-row>
+                  <v-col cols="12">
+                    <v-text-field v-model="newHoliday.Reason" label="Reason for holiday" />
+                  </v-col>
+                  <v-col cols="6">
+                    <v-menu ref="startMenu" v-model="startMenu" :close-on-content-click="false">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-text-field v-model="newHoliday.StartDate" label="Start Date" readonly v-bind="attrs"
+                          v-on="on" />
+                      </template>
+                      <v-date-picker v-model="newHoliday.StartDate" @input="startMenu = false" />
+                    </v-menu>
+                  </v-col>
+                  <v-col cols="6">
+                    <v-select :items="['Full', 'Half']" v-model="newHoliday.StartType" label="Start Type" />
+                  </v-col>
+
+                  <v-col cols="6">
+                    <v-menu ref="endMenu" v-model="endMenu" :close-on-content-click="false">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-text-field v-model="newHoliday.EndDate" label="End Date" readonly v-bind="attrs" v-on="on" />
+                      </template>
+                      <v-date-picker v-model="newHoliday.EndDate" @input="endMenu = false" />
+                    </v-menu>
+                  </v-col>
+                  <v-col cols="6">
+                    <v-select :items="['Full', 'Half']" v-model="newHoliday.EndType" label="End Type" />
+                  </v-col>
+                </v-row>
+              </v-container>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="requestHolidayDialog = false">Cancel</v-btn>
+              <v-btn color="primary" @click="submitHolidayViaGAS">Submit</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- 🗓 Availability Modal -->
+        <v-dialog v-model="requestAvailabilityDialog" max-width="500px">
+          <v-card>
+            <v-card-title>Add Unavailable Time</v-card-title>
+            <v-card-text>
+              <v-container>
+                <v-row>
+                  <v-col cols="12">
+                    <v-text-field v-model="newAvailability.Reason" label="Reason (e.g., holiday, booked)" />
+                  </v-col>
+                  <v-col cols="6">
+                    <v-menu v-model="startUnavailableMenu" :close-on-content-click="false">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-text-field v-model="newAvailability.StartDate" label="Start Date" readonly v-bind="attrs"
+                          v-on="on" />
+                      </template>
+                      <v-date-picker v-model="newAvailability.StartDate" @input="startUnavailableMenu = false" />
+                    </v-menu>
+                  </v-col>
+                  <v-col cols="6">
+                    <v-menu v-model="endUnavailableMenu" :close-on-content-click="false">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-text-field v-model="newAvailability.EndDate" label="End Date" readonly v-bind="attrs"
+                          v-on="on" />
+                      </template>
+                      <v-date-picker v-model="newAvailability.EndDate" @input="endUnavailableMenu = false" />
+                    </v-menu>
+                  </v-col>
+                  <v-col cols="12">
+                    <v-select v-model="newAvailability.Repeat" :items="['None', 'Weekly']" label="Repeat" />
+                  </v-col>
+                </v-row>
+              </v-container>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="requestAvailabilityDialog = false">Cancel</v-btn>
+              <v-btn color="error" @click="submitAvailabilityViaGAS">Save</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- ❌ Reject Holiday Dialog -->
+        <v-dialog v-model="rejectDialogVisible" max-width="500px">
+          <v-card>
+            <v-card-title class="headline red--text">
+              Reject Holiday Request
+            </v-card-title>
+            <v-card-text>
+              <p>
+                Reject holiday request for <strong>{{ rejectTarget?.FullName }}</strong> from
+                <strong>{{ formatDate(rejectTarget?.StartDate) }}</strong> to
+                <strong>{{ formatDate(rejectTarget?.EndDate) }}</strong>?
+              </p>
+              <v-textarea v-model="rejectionReason" label="Reason for Rejection" auto-grow outlined required>
+              </v-textarea>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="rejectDialogVisible = false">Cancel</v-btn>
+              <v-btn color="error" @click="confirmRejectHoliday">Reject</v-btn>
+            </v-card-actions>
+          </v-card>
         </v-dialog>
 
         <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" top right>
@@ -1295,6 +1296,10 @@
           HOLIDAY_ENTITLEMENT: 28,
           googleEvents: [],
           requestHolidayDialog: false,
+          startMenu: false,
+          endMenu: false,
+          startUnavailableMenu: false,
+          endUnavailableMenu: false,
 
           // 🛑 Availability Management
           requestAvailabilityDialog: false,
@@ -2077,82 +2082,79 @@
             google.script.run
               .withSuccessHandler((res) => {
                 if (!Array.isArray(res)) return;
-                const events = res.map(item => ({
-                  start: new Date(item.StartDate),
-                  end: new Date(item.EndDate),
-                  title: item.Reason || "Not Available",
-                  color: 'red'
-                }));
+
+                const events = res
+                  .filter(item => !['Cancelled', 'Rejected'].includes(item.Status)) // if status column exists
+                  .map(item => ({
+                    start: new Date(item.StartDate),
+                    end: new Date(item.EndDate),
+                    title: item.Reason || "Not Available",
+                    color: 'red'
+                  }));
+
                 this.availabilityEvents = events;
               })
               .withFailureHandler(err => {
                 this.showSnackbar("❌ Failed to load availability: " + err.message, "error");
               })
-              .getMyAvailability(); // 👈 You need to create this GAS function
+              .getMyAvailability();
           },
-          async submitHoliday() {
+          async submitHolidayViaGAS() {
             try {
-              const event = {
-                summary: "Holiday",
-                description: this.newHoliday.Reason,
-                start: {
-                  date: this.newHoliday.StartDate
-                },
-                end: {
-                  date: this.newHoliday.EndDate
-                },
-                extendedProperties: {
-                  private: {
-                    status: "Pending",
-                    userEmail: this.user.Email
-                  }
-                }
+              const payload = {
+                StartDate: this.newHoliday.StartDate,
+                EndDate: this.newHoliday.EndDate,
+                StartType: this.newHoliday.StartType || "Full",
+                EndType: this.newHoliday.EndType || "Full",
+                Reason: this.newHoliday.Reason || "Annual Leave"
               };
 
-              const res = await gapi.client.calendar.events.insert({
-                calendarId: 'your_shared_calendar_id@group.calendar.google.com',
-                resource: event
-              });
-
-              this.showSnackbar("✅ Holiday submitted to Google Calendar");
-              this.requestHolidayDialog = false;
-              this.loadSharedCalendar(); // or re-fetch your events
-
+              await google.script.run
+                .withSuccessHandler((res) => {
+                  if (res.success) {
+                    this.showSnackbar("✅ Holiday request submitted.");
+                    this.requestHolidayDialog = false;
+                    this.loadSharedCalendar();
+                  } else {
+                    this.showSnackbar("❌ " + res.error, "error");
+                  }
+                })
+                .withFailureHandler((err) => {
+                  this.showSnackbar("❌ Failed to submit holiday: " + err.message, "error");
+                })
+                .submitHolidayRequest(payload);
             } catch (err) {
-              this.showSnackbar("❌ Failed to submit holiday: " + err.message, "error");
+              this.showSnackbar("❌ Submit error: " + err.message, "error");
             }
           },
-          async submitAvailability() {
-            try {
-              const event = {
-                summary: "Unavailable",
-                description: this.newAvailability.Reason,
-                start: {
-                  date: this.newAvailability.StartDate
-                },
-                end: {
-                  date: this.newAvailability.EndDate
-                },
-                extendedProperties: {
-                  private: {
-                    type: "availability",
-                    userEmail: this.user.Email
-                  }
-                }
-              };
+          submitAvailabilityViaGAS() {
+            const { StartDate, EndDate, Reason } = this.newAvailability;
 
-              const res = await gapi.client.calendar.events.insert({
-                calendarId: 'your_shared_calendar_id@group.calendar.google.com',
-                resource: event
-              });
-
-              this.showSnackbar("✅ Unavailable time added to Calendar");
-              this.requestAvailabilityDialog = false;
-              this.loadSharedCalendar(); // or loadAvailabilityCalendar()
-
-            } catch (err) {
-              this.showSnackbar("❌ Failed to submit availability: " + err.message, "error");
+            if (!StartDate || !EndDate) {
+              this.showSnackbar("⚠️ Please select start and end dates", "warning");
+              return;
             }
+
+            const payload = {
+              StartDate,
+              EndDate,
+              Reason
+            };
+
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.showSnackbar("✅ Availability submitted and synced to calendar");
+                  this.requestAvailabilityDialog = false;
+                  this.loadAvailabilityCalendar();
+                } else {
+                  this.showSnackbar("❌ " + res.error, "error");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ Error: " + err.message, "error");
+              })
+              .submitAvailabilityViaGAS(payload);
           },
           openHolidayRequestDialog() {
             this.newHoliday = {
@@ -2210,30 +2212,35 @@
               .approveOrRejectHoliday(item.HolidayRequestID, "reject", reason);
           },
           initGoogleCalendarAPI() {
-            const API_KEY = 'removed.for.seccirity';
-            const CLIENT_ID = 'removed.for.seccirity.apps.googleusercontent.com';
+            const API_KEY = 'removed for secutiry';
+            const CLIENT_ID = 'removed for secutiry';
             const SCOPES = 'https://www.googleapis.com/auth/calendar';
 
-            gapi.load('client:auth2', async () => {
-              try {
-                await gapi.client.init({
-                  apiKey: API_KEY,
-                  clientId: CLIENT_ID,
-                  discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-                  scope: SCOPES
-                });
+            try {
+              gapi.load('client:auth2', async () => {
+                try {
+                  await gapi.client.init({
+                    apiKey: API_KEY,
+                    clientId: CLIENT_ID,
+                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+                    scope: SCOPES
+                  });
 
-                const isSignedIn = gapi.auth2.getAuthInstance().isSignedIn.get();
-                if (!isSignedIn) {
-                  await gapi.auth2.getAuthInstance().signIn();
+                  const isSignedIn = gapi.auth2.getAuthInstance().isSignedIn.get();
+                  if (!isSignedIn) {
+                    await gapi.auth2.getAuthInstance().signIn();
+                  }
+
+                  this.fetchGoogleCalendarEvents();
+                } catch (innerErr) {
+                  console.error("❌ GAPI Init Inner Error:", innerErr);
+                  this.showSnackbar("❌ Google API init failed: " + (innerErr.message || innerErr), "error");
                 }
-
-                this.fetchGoogleCalendarEvents();
-
-              } catch (err) {
-                this.showSnackbar("❌ Google API init failed: " + err.message, "error");
-              }
-            });
+              });
+            } catch (outerErr) {
+              console.error("❌ GAPI Init Outer Error:", outerErr);
+              this.showSnackbar("❌ Google API outer init failed: " + (outerErr.message || outerErr), "error");
+            }
           },
           async fetchGoogleCalendarEvents() {
             try {
@@ -2386,7 +2393,16 @@
         },
         created() {
           this.tryForceAuth();
-          this.initGoogleCalendarAPI();
+
+          // Wait for gapi to be available
+          if (typeof gapi !== "undefined") {
+            this.initGoogleCalendarAPI();
+          } else {
+            // Retry when it's ready
+            window.addEventListener("gapiLoaded", () => {
+              this.initGoogleCalendarAPI();
+            });
+          }
         }
       });
   </script>
