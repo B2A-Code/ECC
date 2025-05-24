@@ -23,20 +23,6 @@
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue-apexcharts"></script>
 
-  <!-- ✅ GAPI Loader & Callback -->
-  <script>
-    // Dispatch event when gapi is ready
-    function gapiLoadedCallback() {
-      const event = new Event("gapiLoaded");
-      window.dispatchEvent(event);
-    }
-
-    window.gapiLoadedCallback = gapiLoadedCallback;
-  </script>
-
-  <!-- ✅ Google API script with onload trigger -->
-  <script src="https://apis.google.com/js/api.js?onload=gapiLoadedCallback" async defer></script>
-
   <style>
     html,
     body,
@@ -353,13 +339,8 @@
             <v-divider class="my-2"></v-divider>
 
             <v-card-text>
-              <v-data-table
-                :headers="invoiceTableHeadersManager"
-                :items="departmentInvoices"
-                item-key="InvoiceID"
-                dense
-                hide-default-footer
-              >
+              <v-data-table :headers="invoiceTableHeadersManager" :items="departmentInvoices" item-key="InvoiceID" dense
+                hide-default-footer>
                 <template v-slot:item.actions="{ item }">
                   <v-btn icon small @click="approveInvoice(item)">
                     <v-icon color="green">mdi-check</v-icon>
@@ -375,7 +356,7 @@
               </v-data-table>
             </v-card-text>
           </v-card>
-          
+
           <!-- 🧾 My Invoices -->
           <v-card v-if="view === 'myinvoices'" class="ma-4 pa-4" elevation="3">
             <v-card-title>
@@ -447,7 +428,7 @@
                 <v-list-item-content>
                   <v-list-item-title>{{ event.summary }}</v-list-item-title>
                   <v-list-item-subtitle>
-                    {{ formatDate(event.start.date || event.start.dateTime) }} - 
+                    {{ formatDate(event.start.date || event.start.dateTime) }} -
                     {{ formatDate(event.end.date || event.end.dateTime) }}
                   </v-list-item-subtitle>
                 </v-list-item-content>
@@ -460,33 +441,82 @@
             <v-card-title>
               Team Holidays
               <v-spacer></v-spacer>
-              <v-btn small icon @click="loadSharedCalendarEvents">
+              <v-btn small icon @click="loadTeamHolidayCalendar">
                 <v-icon>mdi-refresh</v-icon>
               </v-btn>
             </v-card-title>
 
-            <v-list dense class="mt-3">
-              <v-list-item v-for="event in teamHolidayEvents" :key="event.id">
-                <v-list-item-content>
-                  <v-list-item-title>{{ event.summary }}</v-list-item-title>
-                  <v-list-item-subtitle>
-                    {{ formatDate(event.start.date || event.start.dateTime) }} - 
-                    {{ formatDate(event.end.date || event.end.dateTime) }}
-                  </v-list-item-subtitle>
-                </v-list-item-content>
-              </v-list-item>
-            </v-list>
+            <!-- ✅ Full Team Holiday Table -->
+            <v-data-table :headers="holidayTableHeaders" :items="teamHolidayEvents" item-key="id" dense
+              class="elevation-1 mb-6">
+              <!-- 👤 Avatar column -->
+              <template v-slot:item.Avatar="{ item }">
+                <div class="d-flex align-center">
+                  <v-avatar size="32" class="mr-2">
+                    <v-img :src="item.Avatar || defaultAvatar" cover />
+                  </v-avatar>
+                </div>
+              </template>
+
+              <!-- 🧑 Full name -->
+              <template v-slot:item.FullName="{ item }">
+                {{ item.FullName || 'Unknown' }}
+              </template>
+
+              <!-- 🟢 Status -->
+              <template v-slot:item.Status="{ item }">
+                <v-chip :color="statusColor(item.Status)" dark small>
+                  {{ item.Status }}
+                </v-chip>
+              </template>
+
+              <!-- 📅 Dates -->
+              <template v-slot:item.start="{ item }">
+                {{ formatDate(item.start) }}
+              </template>
+
+              <template v-slot:item.end="{ item }">
+                {{ formatDate(item.end) }}
+              </template>
+            </v-data-table>
 
             <v-divider class="my-4"></v-divider>
 
+            <!-- 🕒 Approval Queue (Pending) -->
             <v-card-subtitle>Pending Requests (From DB)</v-card-subtitle>
-            <v-data-table
-              :headers="approvalTableHeaders"
-              :items="pendingHolidayRequests"
-              item-key="HolidayRequestID"
-              dense
-              class="elevation-1"
-            >
+            <v-data-table :headers="approvalTableHeaders" :items="pendingHolidayRequests" item-key="HolidayRequestID"
+              dense class="elevation-1">
+              <!-- 👤 Avatar -->
+              <template v-slot:item.Avatar="{ item }">
+                <div class="d-flex align-center">
+                  <v-avatar size="32" class="mr-2">
+                    <v-img :src="item.Avatar || defaultAvatar" cover />
+                  </v-avatar>
+                </div>
+              </template>
+
+              <!-- 🧑 Full name -->
+              <template v-slot:item.FullName="{ item }">
+                {{ item.FullName || 'Unknown' }}
+              </template>
+
+              <!-- 🟠 Status -->
+              <template v-slot:item.Status="{ item }">
+                <v-chip small :color="statusColor(item.Status)" dark class="text-uppercase">
+                  {{ item.Status }}
+                </v-chip>
+              </template>
+
+              <!-- 📅 Dates -->
+              <template v-slot:item.start="{ item }">
+                {{ formatDate(item.start) }}
+              </template>
+
+              <template v-slot:item.end="{ item }">
+                {{ formatDate(item.end) }}
+              </template>
+
+              <!-- 🎯 Actions -->
               <template v-slot:item.actions="{ item }">
                 <v-btn small color="success" @click="approveHoliday(item)">Approve</v-btn>
                 <v-btn small color="error" @click="promptRejectHoliday(item)">Reject</v-btn>
@@ -507,7 +537,7 @@
                 <v-list-item-content>
                   <v-list-item-title>{{ ev.summary }}</v-list-item-title>
                   <v-list-item-subtitle>
-                    {{ formatDate(ev.start.date || ev.start.dateTime) }} - 
+                    {{ formatDate(ev.start.date || ev.start.dateTime) }} -
                     {{ formatDate(ev.end.date || ev.end.dateTime) }}
                   </v-list-item-subtitle>
                 </v-list-item-content>
@@ -1146,7 +1176,7 @@
   </div>
 
   <script>
-      new Vue({
+    new Vue({
         el: '#app',
         vuetify: new Vuetify(),
         data: () => ({
@@ -1300,6 +1330,7 @@
           endMenu: false,
           startUnavailableMenu: false,
           endUnavailableMenu: false,
+          defaultAvatar: 'https://i.imgur.com/p5kSl2e.png',
 
           // 🛑 Availability Management
           requestAvailabilityDialog: false,
@@ -1357,11 +1388,22 @@
             { text: 'Status', value: 'Status' },
             { text: 'Actions', value: 'actions', sortable: false }
           ],
-          approvalTableHeaders: [
+          holidayTableHeaders: [
+            { text: '', value: 'Avatar', sortable: false },
             { text: 'Employee', value: 'FullName' },
-            { text: 'Start', value: 'StartDate' },
-            { text: 'End', value: 'EndDate' },
+            { text: 'Start', value: 'start' },
+            { text: 'End', value: 'end' },
             { text: 'Days', value: 'NumberOfDays' },
+            { text: 'Reason', value: 'Reason' },
+            { text: 'Status', value: 'Status' }
+          ],
+          approvalTableHeaders: [
+            { text: '', value: 'Avatar', sortable: false },
+            { text: 'Employee', value: 'FullName' },
+            { text: 'Start', value: 'start' },
+            { text: 'End', value: 'end' },
+            { text: 'Days', value: 'NumberOfDays' },
+            { text: 'Status', value: 'Status' },
             { text: 'Reason', value: 'Reason' },
             { text: 'Actions', value: 'actions', sortable: false }
           ],
@@ -1373,7 +1415,7 @@
                 if (email) {
                   console.log("✅ Auto-auth success:", email);
                   this.sessionInitialized = true;
-                  this.fetchUserSession(); // ← triggers what you had in created()
+                  this.fetchUserSession();
                 } else {
                   console.warn("🟡 No email returned (probably not authorized yet)");
                 }
@@ -1383,7 +1425,7 @@
                 console.error("❌ Auth error", err.message);
                 this.authTried = true;
               })
-              .forceUserAuth(); // your GAS function
+              .forceUserAuth();
           },
           startAppManually() {
             google.script.run
@@ -1476,10 +1518,10 @@
                 this.fetchDepartmentInvoices();
                 break;
               case 'myholidays':
-                this.loadHolidayCalendar();
+                this.fetchGoogleCalendarEvents();
                 break;
               case 'myavailability':
-                this.loadAvailabilityCalendar();
+                this.fetchAvailabilityBlocks();
                 break;
               case 'holidayapprovals':
                 this.fetchHolidayApprovals();
@@ -1903,14 +1945,14 @@
             switch (status) {
               case 'Draft': return 'grey';
               case 'Submitted': return 'blue';
-              case 'ManagerApproved': return 'green';
-              case 'CFOApproved': return 'teal';
+              case 'Approved': return 'green';
               case 'Paid': return 'purple';
               case 'Rejected': return 'red';
               case 'Completed': return 'green';
               case 'Offered': return 'amber';
               case 'Declined': return 'red';
               case 'Accepted': return 'blue';
+              case 'Pending': return 'orange';
               default: return 'grey';
             }
           },
@@ -2114,7 +2156,7 @@
                   if (res.success) {
                     this.showSnackbar("✅ Holiday request submitted.");
                     this.requestHolidayDialog = false;
-                    this.loadSharedCalendar();
+                    this.loadTeamHolidayCalendar();
                   } else {
                     this.showSnackbar("❌ " + res.error, "error");
                   }
@@ -2211,141 +2253,93 @@
               })
               .approveOrRejectHoliday(item.HolidayRequestID, "reject", reason);
           },
-          initGoogleCalendarAPI() {
-            const API_KEY = 'removed for secutiry';
-            const CLIENT_ID = 'removed for secutiry';
-            const SCOPES = 'https://www.googleapis.com/auth/calendar';
-
-            try {
-              gapi.load('client:auth2', async () => {
-                try {
-                  await gapi.client.init({
-                    apiKey: API_KEY,
-                    clientId: CLIENT_ID,
-                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-                    scope: SCOPES
-                  });
-
-                  const isSignedIn = gapi.auth2.getAuthInstance().isSignedIn.get();
-                  if (!isSignedIn) {
-                    await gapi.auth2.getAuthInstance().signIn();
-                  }
-
-                  this.fetchGoogleCalendarEvents();
-                } catch (innerErr) {
-                  console.error("❌ GAPI Init Inner Error:", innerErr);
-                  this.showSnackbar("❌ Google API init failed: " + (innerErr.message || innerErr), "error");
+          fetchGoogleCalendarEvents() {
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.error) {
+                  this.showSnackbar("❌ Error: " + res.message, "error");
+                } else {
+                  this.googleHolidayEvents = res.items || [];
+                  this.holidaysTaken = this.googleHolidayEvents.length;
+                  this.holidayRemaining = this.HOLIDAY_ENTITLEMENT - this.holidaysTaken;
                 }
-              });
-            } catch (outerErr) {
-              console.error("❌ GAPI Init Outer Error:", outerErr);
-              this.showSnackbar("❌ Google API outer init failed: " + (outerErr.message || outerErr), "error");
-            }
-          },
-          async fetchGoogleCalendarEvents() {
-            try {
-              const now = new Date().toISOString();
-              const res = await gapi.client.calendar.events.list({
-                calendarId: 'your_shared_calendar_id@group.calendar.google.com',
-                timeMin: now,
-                showDeleted: false,
-                singleEvents: true,
-                maxResults: 100,
-                orderBy: 'startTime',
-                q: 'Holiday'
-              });
-
-              this.googleHolidayEvents = res.result.items || [];
-              this.holidaysTaken = this.googleHolidayEvents.length;
-              this.holidayRemaining = this.HOLIDAY_ENTITLEMENT - this.holidaysTaken;
-
-            } catch (err) {
-              this.showSnackbar("❌ Failed to fetch events: " + err.message, "error");
-            }
-          },
-          async loadSharedCalendar() {
-            try {
-              const now = new Date().toISOString();
-              const res = await gapi.client.calendar.events.list({
-                calendarId: 'your_shared_calendar_id@group.calendar.google.com',
-                timeMin: now,
-                showDeleted: false,
-                singleEvents: true,
-                maxResults: 100,
-                orderBy: 'startTime'
-              });
-
-              this.teamHolidayEvents = res.result.items || [];
-
-            } catch (err) {
-              this.showSnackbar("❌ Could not load shared calendar: " + err.message, "error");
-            }
+              })
+              .withFailureHandler(err => {
+                this.showSnackbar("❌ Script error: " + err.message, "error");
+              })
+              .getGoogleHolidayEventsFromGAS();
           },
           fetchAvailabilityBlocks() {
-            gapi.client.calendar.events.list({
-              calendarId: 'primary',
-              q: 'Unavailable',
-              timeMin: new Date().toISOString(),
-              showDeleted: false,
-              singleEvents: true,
-              maxResults: 50,
-              orderBy: 'startTime'
-            }).then(res => {
-              this.unavailableDates = res.result.items;
-            });
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (Array.isArray(res)) {
+                  this.unavailableDates = res;
+                } else {
+                  this.unavailableDates = [];
+                  this.showSnackbar("⚠️ No availability data returned", "warning");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ Failed to load availability: " + err.message, "error");
+              })
+              .getMyAvailability(); // ✅ Already in your backend
           },
-
           loadTeamHolidayCalendar() {
             google.script.run
               .withSuccessHandler(res => {
                 if (!Array.isArray(res)) return;
-                this.teamHolidayEvents = res.map(item => ({
-                  start: new Date(item.StartDate),
-                  end: new Date(item.EndDate),
-                  title: `${item.FullName} (${item.Status})`,
-                  color: item.Status === 'Approved' ? 'green' :
-                        item.Status === 'Rejected' ? 'red' : 'orange'
-                }));
+
+                const approvedOrRejected = [];
+                const pending = [];
+
+                res.forEach(item => {
+                  const parsed = {
+                    ...item,
+                    start: new Date(item.StartDate),
+                    end: new Date(item.EndDate),
+                    title: `${item.FullName} (${item.Status})`
+                  };
+
+                  if (item.Status === 'Pending') {
+                    pending.push(parsed);
+                  } else {
+                    approvedOrRejected.push(parsed);
+                  }
+                });
+
+                this.teamHolidayEvents = approvedOrRejected;
+                this.pendingHolidayRequests = pending;
               })
               .withFailureHandler(err => {
                 this.showSnackbar("❌ Failed to load team holidays: " + err.message, "error");
               })
-              .getTeamHolidayCalendar(); // 👈 You must add this in GAS
+              .getTeamHolidayCalendar();
           },
           promptRejectHoliday(item) {
             this.rejectTarget = item;
             this.rejectionReason = '';
             this.rejectDialogVisible = true;
           },
-          async confirmRejectHoliday() {
+          confirmRejectHoliday() {
             if (!this.rejectionReason.trim()) {
               this.showSnackbar("❗Please enter a reason", "warning");
               return;
             }
 
-            try {
-              const calendarId = 'your_shared_calendar_id@group.calendar.google.com';
-              const eventId = this.rejectTarget.EventID;
-
-              const res = await gapi.client.calendar.events.get({ calendarId, eventId });
-              const event = res.result;
-              event.extendedProperties = event.extendedProperties || { private: {} };
-              event.extendedProperties.private.status = 'Rejected';
-              event.description += `\n\n[REJECTED] ${this.rejectionReason}`;
-
-              await gapi.client.calendar.events.update({
-                calendarId,
-                eventId,
-                resource: event
-              });
-
-              this.showSnackbar("❌ Holiday request rejected");
-              this.rejectDialogVisible = false;
-              this.loadSharedCalendar();
-
-            } catch (err) {
-              this.showSnackbar("❌ Error rejecting event: " + err.message, "error");
-            }
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (res.success) {
+                  this.showSnackbar("❌ Holiday request rejected");
+                  this.rejectDialogVisible = false;
+                  this.loadTeamHolidayCalendar();
+                } else {
+                  this.showSnackbar("❌ " + res.error, "error");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ Script error: " + err.message, "error");
+              })
+              .rejectHolidayEventInCalendar(this.rejectTarget.EventID, this.rejectionReason);
           },
           formatDate(iso) {
             if (!iso) return '';
@@ -2393,16 +2387,6 @@
         },
         created() {
           this.tryForceAuth();
-
-          // Wait for gapi to be available
-          if (typeof gapi !== "undefined") {
-            this.initGoogleCalendarAPI();
-          } else {
-            // Retry when it's ready
-            window.addEventListener("gapiLoaded", () => {
-              this.initGoogleCalendarAPI();
-            });
-          }
         }
       });
   </script>
