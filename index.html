@@ -23,6 +23,10 @@
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue-apexcharts"></script>
 
+  <!-- ✅ FullCalendar CSS + JS -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.5/main.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.5/main.min.js"></script>
+
   <style>
     html,
     body,
@@ -217,7 +221,7 @@
             </v-data-table>
           </v-card>
 
-          <!-- 👤 My Shifts -->
+          <!-- 🕒 My Shifts 🕒 -->
           <v-card v-if="view === 'myshifts'" class="ma-4 pa-4" elevation="3">
             <v-card-title>
               My Shifts
@@ -279,7 +283,7 @@
             </v-card-text>
           </v-card>
 
-          <!-- 👥 Team Shifts -->
+          <!-- 🕒 Team Shifts 🕒 -->
           <v-card v-if="view === 'teamshifts'" class="ma-4 pa-4" elevation="3">
             <v-card-title>
               Team Shifts — Department: {{ user.Department }}
@@ -326,7 +330,7 @@
             </v-card-text>
           </v-card>
 
-          <!-- 🧾 Department Invoices -->
+          <!-- 🧾 Department Invoices 🧾 -->
           <v-card v-if="view === 'departmentinvoices'" class="ma-4 pa-4" elevation="3">
             <v-card-title>
               Department Invoices
@@ -357,7 +361,7 @@
             </v-card-text>
           </v-card>
 
-          <!-- 🧾 My Invoices -->
+          <!-- 🧾 My Invoices 🧾 -->
           <v-card v-if="view === 'myinvoices'" class="ma-4 pa-4" elevation="3">
             <v-card-title>
               My Invoices
@@ -402,129 +406,231 @@
             </v-card-text>
           </v-card>
 
-          <!-- 🌴 My Holidays View -->
-          <v-card v-if="view === 'myholidays'" class="ma-4 pa-4">
-            <v-card-title>
-              My Holidays
-              <v-spacer></v-spacer>
-              <v-btn color="primary" small @click="openHolidayRequestDialog">Request Holiday</v-btn>
-            </v-card-title>
+<!-- 🌴 My Holidays (Employee View) -->
+<v-card v-if="view === 'myholidays'" class="ma-4 pa-4">
+  <v-card-title>
+    My Holidays
+    <v-spacer></v-spacer>
+    <v-btn color="primary" small @click="openHolidayRequestDialog">
+      <v-icon left>mdi-plus</v-icon> Request Holiday
+    </v-btn>
+  </v-card-title>
 
-            <v-row dense>
-              <v-col cols="6">
-                <v-alert border="left" type="info">
-                  <strong>Days Remaining:</strong> {{ daysRemaining }}
-                </v-alert>
-              </v-col>
-              <v-col cols="6">
-                <v-alert border="left" type="success">
-                  <strong>Days Taken:</strong> {{ daysTaken }}
-                </v-alert>
-              </v-col>
-            </v-row>
+  <!-- Holiday Summary -->
+  <v-row dense class="mb-4">
+    <v-col cols="4">
+      <v-alert border="left" type="info">
+        <strong>Days Remaining:</strong> {{ holidayRemaining }}
+      </v-alert>
+    </v-col>
+    <v-col cols="4">
+      <v-alert border="left" type="warning">
+        <strong>Days Pending:</strong> {{ holidayPending }}
+      </v-alert>
+    </v-col>
+    <v-col cols="4">
+      <v-alert border="left" type="success">
+        <strong>Days Taken:</strong> {{ holidaysTaken }}
+      </v-alert>
+    </v-col>
+  </v-row>
 
-            <v-list class="mt-3" two-line>
-              <v-list-item v-for="event in googleHolidayEvents" :key="event.id">
-                <v-list-item-content>
-                  <v-list-item-title>{{ event.summary }}</v-list-item-title>
-                  <v-list-item-subtitle>
-                    {{ formatDate(event.start.date || event.start.dateTime) }} -
-                    {{ formatDate(event.end.date || event.end.dateTime) }}
-                  </v-list-item-subtitle>
-                </v-list-item-content>
-              </v-list-item>
-            </v-list>
-          </v-card>
+  <!-- 🧭 Tabs -->
+  <v-tabs v-model="activeMyHolidayTab" background-color="#1e1e1e" dark>
+    <v-tab>Approved</v-tab>
+    <v-tab>Pending</v-tab>
+    <v-tab>Rejected</v-tab>
+    <v-tab>Calendar</v-tab>
+  </v-tabs>
 
-          <!-- 🌴 Holiday Approvals (Manager) -->
+  <v-tabs-items v-model="activeMyHolidayTab" eager>
+    <!-- ✅ Approved -->
+    <v-tab-item>
+      <v-card-subtitle>Approved Holidays</v-card-subtitle>
+      <v-data-table
+        :headers="myApprovedHolidayRequestsTableHeaders"
+        :items="myApprovedHolidayEvents"
+        item-key="holidayRequestId"
+        dense
+        class="elevation-1 mb-4"
+      >
+                  <template v-slot:item.status="{ item }">
+                    <v-chip :color="getHolidayStatusMeta(item.status).color" dark>
+                      {{ getHolidayStatusMeta(item.status).label }}
+                    </v-chip>
+                  </template>
+        <template v-slot:item.start="{ item }">{{ formatDate(item.start) }}</template>
+        <template v-slot:item.end="{ item }">{{ formatDate(item.end) }}</template>
+        <template v-slot:item.actions="{ item }">
+          <span class="grey--text">—</span>
+        </template>
+      </v-data-table>
+    </v-tab-item>
+
+    <!-- 🕒 Pending -->
+    <v-tab-item>
+      <v-card-subtitle>Pending Requests</v-card-subtitle>
+      <v-data-table
+        :headers="myHolidayRequestsTableHeaders"
+        :items="myPendingHolidayEvents"
+        item-key="holidayRequestId"
+        dense
+        class="elevation-1 mb-4"
+      >
+                  <template v-slot:item.status="{ item }">
+                    <v-chip :color="getHolidayStatusMeta(item.status).color" dark small>
+                      {{ getHolidayStatusMeta(item.status).label }}
+                    </v-chip>
+                  </template>
+        <template v-slot:item.start="{ item }">{{ formatDate(item.start) }}</template>
+        <template v-slot:item.end="{ item }">{{ formatDate(item.end) }}</template>
+        <template v-slot:item.actions="{ item }">
+          <v-btn small color="error" @click="cancelHolidayRequest(item)">Cancel</v-btn>
+        </template>
+      </v-data-table>
+    </v-tab-item>
+
+    <!-- ❌ Rejected -->
+    <v-tab-item>
+      <v-card-subtitle>Rejected Requests</v-card-subtitle>
+      <v-data-table
+        :headers="myRejectedHolidayRequestsTableHeaders"
+        :items="myRejectedHolidayEvents"
+        item-key="holidayRequestId"
+        dense
+        class="elevation-1"
+      >
+                  <template v-slot:item.status="{ item }">
+                    <v-chip :color="getHolidayStatusMeta(item.status).color" dark small>
+                      {{ getHolidayStatusMeta(item.status).label }}
+                    </v-chip>
+                  </template>
+        <template v-slot:item.start="{ item }">{{ formatDate(item.start) }}</template>
+        <template v-slot:item.end="{ item }">{{ formatDate(item.end) }}</template>
+        <template v-slot:item.actions="{ item }">
+          <v-btn small color="primary" @click="startReRequestHolidayWizard(item)">Re-request</v-btn>
+        </template>
+      </v-data-table>
+    </v-tab-item>
+
+    <!-- 📅 Calendar View (My Holidays) -->
+    <v-tab-item>
+      <v-card-subtitle>Calendar View</v-card-subtitle>
+      <div id="my-holiday-calendar" style="background:white; padding: 16px; border-radius: 6px;"></div>
+    </v-tab-item>
+  </v-tabs-items>
+</v-card>
+
+          <!-- 🌴 Holiday Approvals (Manager) 🌴 -->
           <v-card v-if="view === 'holidayapprovals'" class="ma-4 pa-4">
             <v-card-title>
               Team Holidays
-              <v-spacer></v-spacer>
+              <v-spacer />
               <v-btn small icon @click="loadTeamHolidayCalendar">
                 <v-icon>mdi-refresh</v-icon>
               </v-btn>
             </v-card-title>
 
-            <!-- ✅ Full Team Holiday Table -->
-            <v-data-table :headers="holidayTableHeaders" :items="teamHolidayEvents" item-key="id" dense
-              class="elevation-1 mb-6">
-              <!-- 👤 Avatar column -->
-              <template v-slot:item.Avatar="{ item }">
-                <div class="d-flex align-center">
-                  <v-avatar size="32" class="mr-2">
-                    <v-img :src="item.Avatar || defaultAvatar" cover />
-                  </v-avatar>
-                </div>
-              </template>
+            <!-- 🚀 Tabs -->
+            <v-tabs v-model="activeApprovalHolidayTab" background-color="#1e1e1e" dark small>
+              <v-tab>Approved</v-tab>
+              <v-tab>Pending</v-tab>
+              <v-tab>Rejected</v-tab>
+              <v-tab>Calendar</v-tab>
+            </v-tabs>
 
-              <!-- 🧑 Full name -->
-              <template v-slot:item.FullName="{ item }">
-                {{ item.FullName || 'Unknown' }}
-              </template>
+            <v-tabs-items v-model="activeApprovalHolidayTab" eager>
+              <!-- ✅ Approved -->
+              <v-tab-item>
+                <v-card-subtitle>Approved Holidays</v-card-subtitle>
+                <v-data-table
+                  :headers="holidayTableHeaders"
+                  :items="approvedHolidayEvents"
+                  item-key="holidayRequestId"
+                  dense
+                  class="elevation-1 mb-4"
+                >
+                  <template v-slot:item.avatar="{ item }">
+                    <v-avatar size="32" class="mr-2">
+                      <v-img :src="item.avatar || defaultAvatar" cover />
+                    </v-avatar>
+                  </template>
+                  <template v-slot:item.fullName="{ item }">{{ item.fullName }}</template>
+                  <template v-slot:item.status="{ item }">
+                    <v-chip :color="getHolidayStatusMeta(item.status).color" dark small>
+                      {{ getHolidayStatusMeta(item.status).label }}
+                    </v-chip>
+                  </template>
+                  <template v-slot:item.start="{ item }">{{ formatDate(item.start) }}</template>
+                  <template v-slot:item.end="{ item }">{{ formatDate(item.end) }}</template>
+                </v-data-table>
+              </v-tab-item>
 
-              <!-- 🟢 Status -->
-              <template v-slot:item.Status="{ item }">
-                <v-chip :color="statusColor(item.Status)" dark small>
-                  {{ item.Status }}
-                </v-chip>
-              </template>
+              <!-- 🕒 Pending -->
+              <v-tab-item>
+                <v-card-subtitle>Pending Holidays</v-card-subtitle>
+                <v-data-table
+                  :headers="approvalTableHeaders"
+                  :items="pendingHolidayEvents"
+                  item-key="holidayRequestId"
+                  dense
+                  class="elevation-1 mb-4"
+                >
+                  <template v-slot:item.avatar="{ item }">
+                    <v-avatar size="32" class="mr-2">
+                      <v-img :src="item.avatar || defaultAvatar" cover />
+                    </v-avatar>
+                  </template>
+                  <template v-slot:item.fullName="{ item }">{{ item.fullName }}</template>
+                  <template v-slot:item.status="{ item }">
+                    <v-chip :color="getHolidayStatusMeta(item.status).color" dark small>
+                      {{ getHolidayStatusMeta(item.status).label }}
+                    </v-chip>
+                  </template>
+                  <template v-slot:item.start="{ item }">{{ formatDate(item.start) }}</template>
+                  <template v-slot:item.end="{ item }">{{ formatDate(item.end) }}</template>
+                  <template v-slot:item.actions="{ item }">
+                    <v-btn small color="success" @click="approveHoliday(item)">Approve</v-btn>
+                    <v-btn small color="error" @click="promptRejectHoliday(item)">Reject</v-btn>
+                  </template>
+                </v-data-table>
+              </v-tab-item>
 
-              <!-- 📅 Dates -->
-              <template v-slot:item.start="{ item }">
-                {{ formatDate(item.start) }}
-              </template>
+              <!-- ❌ Rejected -->
+              <v-tab-item>
+                <v-card-subtitle>Rejected Holidays</v-card-subtitle>
+                <v-data-table
+                  :headers="rejectedHolidayTableHeaders"
+                  :items="rejectedHolidayEvents"
+                  item-key="holidayRequestId"
+                  dense
+                  class="elevation-1"
+                >
+                  <template v-slot:item.avatar="{ item }">
+                    <v-avatar size="32" class="mr-2">
+                      <v-img :src="item.avatar || defaultAvatar" cover />
+                    </v-avatar>
+                  </template>
+                  <template v-slot:item.fullName="{ item }">{{ item.fullName }}</template>
+                  <template v-slot:item.status="{ item }">
+                    <v-chip :color="getHolidayStatusMeta(item.status).color" dark small>
+                      {{ getHolidayStatusMeta(item.status).label }}
+                    </v-chip>
+                  </template>
+                  <template v-slot:item.start="{ item }">{{ formatDate(item.start) }}</template>
+                  <template v-slot:item.end="{ item }">{{ formatDate(item.end) }}</template>
+                </v-data-table>
+              </v-tab-item>
 
-              <template v-slot:item.end="{ item }">
-                {{ formatDate(item.end) }}
-              </template>
-            </v-data-table>
-
-            <v-divider class="my-4"></v-divider>
-
-            <!-- 🕒 Approval Queue (Pending) -->
-            <v-card-subtitle>Pending Requests (From DB)</v-card-subtitle>
-            <v-data-table :headers="approvalTableHeaders" :items="pendingHolidayRequests" item-key="HolidayRequestID"
-              dense class="elevation-1">
-              <!-- 👤 Avatar -->
-              <template v-slot:item.Avatar="{ item }">
-                <div class="d-flex align-center">
-                  <v-avatar size="32" class="mr-2">
-                    <v-img :src="item.Avatar || defaultAvatar" cover />
-                  </v-avatar>
-                </div>
-              </template>
-
-              <!-- 🧑 Full name -->
-              <template v-slot:item.FullName="{ item }">
-                {{ item.FullName || 'Unknown' }}
-              </template>
-
-              <!-- 🟠 Status -->
-              <template v-slot:item.Status="{ item }">
-                <v-chip small :color="statusColor(item.Status)" dark class="text-uppercase">
-                  {{ item.Status }}
-                </v-chip>
-              </template>
-
-              <!-- 📅 Dates -->
-              <template v-slot:item.start="{ item }">
-                {{ formatDate(item.start) }}
-              </template>
-
-              <template v-slot:item.end="{ item }">
-                {{ formatDate(item.end) }}
-              </template>
-
-              <!-- 🎯 Actions -->
-              <template v-slot:item.actions="{ item }">
-                <v-btn small color="success" @click="approveHoliday(item)">Approve</v-btn>
-                <v-btn small color="error" @click="promptRejectHoliday(item)">Reject</v-btn>
-              </template>
-            </v-data-table>
+              <!-- 📅 Calendar View (Holiday Approvals) -->
+              <v-tab-item>
+                <v-card-subtitle>Calendar View</v-card-subtitle>
+                <div id="team-holiday-calendar" style="background:white; padding: 16px; border-radius: 6px;"></div>
+              </v-tab-item>
+            </v-tabs-items>
           </v-card>
 
-          <!-- 📅 My Availability (Contractors) -->
+          <!-- 📅 My Availability (Contractors) 📅 -->
           <v-card v-if="view === 'myavailability'" class="ma-4 pa-4">
             <v-card-title>
               My Availability
@@ -546,7 +652,7 @@
           </v-card>
         </v-container>
 
-        <!-- Profile Modal -->
+        <!-- 👤  Profile Modal  👤 -->
         <v-dialog v-model="showProfileDialog" max-width="600px">
           <v-card>
             <v-toolbar color="#000000" dark flat>
@@ -589,7 +695,7 @@
           </v-card>
         </v-dialog>
 
-        <!-- Create, Edit, View User Modal -->
+        <!-- 👤 Create, Edit, View User Modal 👤 -->
         <v-dialog v-model="dialog" max-width="800px" persistent>
           <v-card>
             <v-toolbar color="#000000" dark flat>
@@ -773,7 +879,7 @@
           </v-card>
         </v-dialog>
 
-        <!-- ✅ Create Shift Modal -->
+        <!-- 🕒 Create Shift Modal 🕒 -->
         <v-dialog v-model="createShiftDialog" max-width="600px" persistent>
           <v-card>
             <v-card-title>Create Shift</v-card-title>
@@ -867,7 +973,7 @@
           </v-card>
         </v-dialog>
 
-        <!-- 🔍 View Invoice Modal -->
+        <!--  🧾 View Invoice Modal  🧾 -->
         <v-dialog v-model="viewInvoiceDialog" max-width="700px">
           <v-card>
             <v-toolbar color="#000000" dark flat>
@@ -918,7 +1024,7 @@
           </v-card>
         </v-dialog>
 
-        <!-- 🧾 Create Manual Invoice Modal -->
+        <!-- 🧾 Create Manual Invoice Modal  🧾 -->
         <v-dialog v-model="createInvoiceDialog" max-width="600px" persistent>
           <v-card>
             <v-toolbar color="#000000" dark flat>
@@ -973,7 +1079,7 @@
             </v-card-text>
         </v-dialog>
 
-        <!-- 🔍 Invoice Preview Dialog -->
+        <!--  🧾 Invoice Preview Dialog  🧾 -->
         <v-dialog v-model="previewInvoiceDialog" max-width="700px" persistent>
           <v-card>
             <v-toolbar flat color="#000000" dark>
@@ -1025,7 +1131,7 @@
           </v-card>
         </v-dialog>
 
-        <!-- 🧾 Create New Invoice Modal -->
+        <!-- 🧾 Create New Invoice Modal  🧾 -->
         <v-dialog v-model="newInvoiceDialog" max-width="600px">
           <v-card>
             <v-card-title>
@@ -1059,8 +1165,8 @@
           </v-card>
         </v-dialog>
 
-        <!-- 🗓 Holiday Request Modal -->
-        <v-dialog v-model="showHolidayRequestDialog" max-width="500px">
+        <!-- 🌴 Holiday Request Modal 🌴 -->
+        <v-dialog v-model="requestHolidayDialog" max-width="500px">
           <v-card>
             <v-card-title>Request Holiday</v-card-title>
             <v-card-text>
@@ -1104,7 +1210,92 @@
           </v-card>
         </v-dialog>
 
-        <!-- 🗓 Availability Modal -->
+        <!--  🌴 Re-Request Holiday Dialog  🌴 -->
+        <v-dialog v-model="reRequestHolidayDialog" max-width="600px">
+          <v-card>
+            <v-card-title>Re-Request Holiday</v-card-title>
+
+            <v-card-text>
+              <v-stepper v-model="reRequestWizardStep">
+                <!-- Step 1 -->
+                <v-stepper-content step="1">
+                  <v-alert type="error" outlined>
+                    <strong>Reason for Rejection:</strong><br>
+                    {{ reRequestHoliday.rejectionReason }}
+                  </v-alert>
+
+                  <p>Would you like to re-request this holiday?</p>
+
+                  <v-btn color="primary" @click="reRequestWizardStep = 2">Yes</v-btn>
+                  <v-btn color="secondary" @click="cancelReRequest">No, cancel request</v-btn>
+                </v-stepper-content>
+
+                <!-- Step 2 -->
+                <v-stepper-content step="2">
+                  <v-container>
+                    <v-row>
+                      <v-col cols="12">
+                        <v-text-field v-model="reRequestHoliday.Reason" label="Reason for holiday" />
+                      </v-col>
+
+                      <v-col cols="6">
+                        <v-menu ref="startMenu" v-model="startUnavailableMenu" :close-on-content-click="false">
+                          <template v-slot:activator="{ on, attrs }">
+                            <v-text-field v-model="reRequestHoliday.StartDate" label="Start Date" readonly v-bind="attrs" v-on="on" />
+                          </template>
+                          <v-date-picker v-model="reRequestHoliday.StartDate" @input="startUnavailableMenu = false" />
+                        </v-menu>
+                      </v-col>
+                      <v-col cols="6">
+                        <v-select :items="['Full', 'Half']" v-model="reRequestHoliday.StartType" label="Start Type" />
+                      </v-col>
+
+                      <v-col cols="6">
+                        <v-menu ref="endMenu" v-model="endUnavailableMenu" :close-on-content-click="false">
+                          <template v-slot:activator="{ on, attrs }">
+                            <v-text-field v-model="reRequestHoliday.EndDate" label="End Date" readonly v-bind="attrs" v-on="on" />
+                          </template>
+                          <v-date-picker v-model="reRequestHoliday.EndDate" @input="endUnavailableMenu = false" />
+                        </v-menu>
+                      </v-col>
+                      <v-col cols="6">
+                        <v-select :items="['Full', 'Half']" v-model="reRequestHoliday.EndType" label="End Type" />
+                      </v-col>
+                    </v-row>
+                  </v-container>
+
+                  <v-btn text @click="reRequestHolidayDialog = false">Cancel</v-btn>
+                  <v-btn color="primary" @click="confirmReRequest">Submit New Request</v-btn>
+                </v-stepper-content>
+              </v-stepper>
+            </v-card-text>
+          </v-card>
+        </v-dialog>
+
+        <!--  🌴 ❌ Reject Holiday Dialog  🌴 -->
+        <v-dialog v-model="rejectDialogVisible" max-width="500px">
+          <v-card>
+            <v-card-title class="headline red--text">
+              Reject Holiday Request
+            </v-card-title>
+            <v-card-text>
+              <p>
+                Reject holiday request for <strong>{{ rejectTarget?.FullName }}</strong> from
+                <strong>{{ formatDate(rejectTarget?.StartDate) }}</strong> to
+                <strong>{{ formatDate(rejectTarget?.EndDate) }}</strong>?
+              </p>
+              <v-textarea v-model="rejectionReason" label="Reason for Rejection" auto-grow outlined required>
+              </v-textarea>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn text @click="rejectDialogVisible = false">Cancel</v-btn>
+              <v-btn color="error" @click="confirmRejectHoliday">Reject</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- 📅 Availability Modal 📅 -->
         <v-dialog v-model="requestAvailabilityDialog" max-width="500px">
           <v-card>
             <v-card-title>Add Unavailable Time</v-card-title>
@@ -1142,29 +1333,6 @@
               <v-spacer></v-spacer>
               <v-btn text @click="requestAvailabilityDialog = false">Cancel</v-btn>
               <v-btn color="error" @click="submitAvailabilityViaGAS">Save</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-
-        <!-- ❌ Reject Holiday Dialog -->
-        <v-dialog v-model="rejectDialogVisible" max-width="500px">
-          <v-card>
-            <v-card-title class="headline red--text">
-              Reject Holiday Request
-            </v-card-title>
-            <v-card-text>
-              <p>
-                Reject holiday request for <strong>{{ rejectTarget?.FullName }}</strong> from
-                <strong>{{ formatDate(rejectTarget?.StartDate) }}</strong> to
-                <strong>{{ formatDate(rejectTarget?.EndDate) }}</strong>?
-              </p>
-              <v-textarea v-model="rejectionReason" label="Reason for Rejection" auto-grow outlined required>
-              </v-textarea>
-            </v-card-text>
-            <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn text @click="rejectDialogVisible = false">Cancel</v-btn>
-              <v-btn color="error" @click="confirmRejectHoliday">Reject</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
@@ -1309,7 +1477,6 @@
           departmentInvoices: [],
           
           // 🏖️ Holiday Management
-          showHolidayRequestDialog: false,
           newHoliday: {
             StartDate: '',
             EndDate: '',
@@ -1318,11 +1485,21 @@
           rejectDialogVisible: false,
           rejectionReason: '',
           rejectTarget: null,
+          reRequestHolidayDialog: false,
+          reRequestWizardStep: 1,
+          reRequestHoliday: {
+            rejectionReason: '',
+            StartDate: '',
+            EndDate: '',
+            StartType: 'Full',
+            EndType: 'Full',
+            Reason: '',
+            originalItem: null
+          },
           googleHolidayEvents: [],
-          teamHolidayEvents: [],
-          pendingHolidayRequests: [],
           holidaysTaken: 0,
           holidayRemaining: 0,
+          holidayPending: 0,
           HOLIDAY_ENTITLEMENT: 28,
           googleEvents: [],
           requestHolidayDialog: false,
@@ -1330,6 +1507,9 @@
           endMenu: false,
           startUnavailableMenu: false,
           endUnavailableMenu: false,
+          teamHolidayEvents: [],
+          activeMyHolidayTab: 0,
+          activeApprovalHolidayTab: 0,
           defaultAvatar: 'https://i.imgur.com/p5kSl2e.png',
 
           // 🛑 Availability Management
@@ -1389,23 +1569,52 @@
             { text: 'Actions', value: 'actions', sortable: false }
           ],
           holidayTableHeaders: [
-            { text: '', value: 'Avatar', sortable: false },
-            { text: 'Employee', value: 'FullName' },
-            { text: 'Start', value: 'start' },
-            { text: 'End', value: 'end' },
-            { text: 'Days', value: 'NumberOfDays' },
-            { text: 'Reason', value: 'Reason' },
-            { text: 'Status', value: 'Status' }
+            { text: '',        value: 'avatar',      sortable: false },
+            { text: 'Employee', value: 'fullName'   },
+            { text: 'Start',    value: 'start'      },
+            { text: 'End',      value: 'end'        },
+            { text: 'Days',     value: 'numberOfDays' },
+            { text: 'Status',   value: 'status'     }
           ],
           approvalTableHeaders: [
-            { text: '', value: 'Avatar', sortable: false },
-            { text: 'Employee', value: 'FullName' },
-            { text: 'Start', value: 'start' },
-            { text: 'End', value: 'end' },
-            { text: 'Days', value: 'NumberOfDays' },
-            { text: 'Status', value: 'Status' },
-            { text: 'Reason', value: 'Reason' },
-            { text: 'Actions', value: 'actions', sortable: false }
+            { text: '',        value: 'avatar',      sortable: false },
+            { text: 'Employee', value: 'fullName'   },
+            { text: 'Start',    value: 'start'      },
+            { text: 'End',      value: 'end'        },
+            { text: 'Days',     value: 'numberOfDays' },
+            { text: 'Status',   value: 'status'     },
+            { text: 'Actions',  value: 'actions',    sortable: false }
+          ],
+          rejectedHolidayTableHeaders: [
+            { text: '',        value: 'avatar',      sortable: false },
+            { text: 'Employee', value: 'fullName'   },
+            { text: 'Start',    value: 'start'      },
+            { text: 'End',      value: 'end'        },
+            { text: 'Days',     value: 'numberOfDays' },
+            { text: 'Reason',   value: 'reason'     },
+            { text: 'Status',   value: 'status'     }
+          ],
+          myHolidayRequestsTableHeaders: [
+            { text: 'Start',    value: 'start'      },
+            { text: 'End',      value: 'end'        },
+            { text: 'Days',     value: 'numberOfDays' },
+            { text: 'Status',   value: 'status'     },
+            { text: 'Actions',  value: 'actions',    sortable: false }
+          ],
+          myApprovedHolidayRequestsTableHeaders: [
+            { text: 'Start',    value: 'start'      },
+            { text: 'End',      value: 'end'        },
+            { text: 'Days',     value: 'numberOfDays' },
+            { text: 'Status',   value: 'status'     },
+            { text: 'Actions',  value: 'actions',    sortable: false }
+          ],
+          myRejectedHolidayRequestsTableHeaders: [
+            { text: 'Start',    value: 'start'      },
+            { text: 'End',      value: 'end'        },
+            { text: 'Days',     value: 'numberOfDays' },
+            { text: 'Reason',   value: 'reason'     },
+            { text: 'Status',   value: 'status'     },
+            { text: 'Actions',  value: 'actions',    sortable: false }
           ],
         }),
         methods: {
@@ -1518,7 +1727,7 @@
                 this.fetchDepartmentInvoices();
                 break;
               case 'myholidays':
-                this.fetchGoogleCalendarEvents();
+                this.loadMyHolidayCalendar();
                 break;
               case 'myavailability':
                 this.fetchAvailabilityBlocks();
@@ -1956,6 +2165,16 @@
               default: return 'grey';
             }
           },
+          getHolidayStatusMeta(status) {
+            const map = {
+              PendingManagerApproval: { label: "Awaiting Manager", color: "#f1c40f" },
+              PendingCFOApproval:    { label: "Awaiting CFO",     color: "#f39c12" },
+              Approved:              { label: "Approved",         color: "#2ecc71" },
+              Rejected:              { label: "Rejected",         color: "#e74c3c" },
+              Cancelled:             { label: "Cancelled",        color: "#95a5a6" }
+            };
+            return map[status] || { label: status || "Unknown", color: "#ccc" };
+          },
           actionIcon(status) {
             switch (status) {
               case 'Offered': return 'mdi-help-circle';
@@ -2120,13 +2339,29 @@
               })
               .deleteInvoiceById(id);
           },
+
+          fetchAvailabilityBlocks() {
+            google.script.run
+              .withSuccessHandler((res) => {
+                if (Array.isArray(res)) {
+                  this.unavailableDates = res;
+                } else {
+                  this.unavailableDates = [];
+                  this.showSnackbar("⚠️ No availability data returned", "warning");
+                }
+              })
+              .withFailureHandler((err) => {
+                this.showSnackbar("❌ Failed to load availability: " + err.message, "error");
+              })
+              .getMyAvailability(); // ✅ Already in your backend
+          },
           loadAvailabilityCalendar() {
             google.script.run
               .withSuccessHandler((res) => {
                 if (!Array.isArray(res)) return;
 
                 const events = res
-                  .filter(item => !['Cancelled', 'Rejected'].includes(item.Status)) // if status column exists
+                  .filter(item => !['Cancelled', 'Rejected'].includes(item.Status))
                   .map(item => ({
                     start: new Date(item.StartDate),
                     end: new Date(item.EndDate),
@@ -2135,39 +2370,16 @@
                   }));
 
                 this.availabilityEvents = events;
+
+                // ✅ Ensure the calendar renders only when visible
+                if (this.view === 'myavailability' && this.activeAvailabilityTab === 3) {
+                  this.$nextTick(() => this.renderAvailabilityCalendar?.());
+                }
               })
               .withFailureHandler(err => {
                 this.showSnackbar("❌ Failed to load availability: " + err.message, "error");
               })
               .getMyAvailability();
-          },
-          async submitHolidayViaGAS() {
-            try {
-              const payload = {
-                StartDate: this.newHoliday.StartDate,
-                EndDate: this.newHoliday.EndDate,
-                StartType: this.newHoliday.StartType || "Full",
-                EndType: this.newHoliday.EndType || "Full",
-                Reason: this.newHoliday.Reason || "Annual Leave"
-              };
-
-              await google.script.run
-                .withSuccessHandler((res) => {
-                  if (res.success) {
-                    this.showSnackbar("✅ Holiday request submitted.");
-                    this.requestHolidayDialog = false;
-                    this.loadTeamHolidayCalendar();
-                  } else {
-                    this.showSnackbar("❌ " + res.error, "error");
-                  }
-                })
-                .withFailureHandler((err) => {
-                  this.showSnackbar("❌ Failed to submit holiday: " + err.message, "error");
-                })
-                .submitHolidayRequest(payload);
-            } catch (err) {
-              this.showSnackbar("❌ Submit error: " + err.message, "error");
-            }
           },
           submitAvailabilityViaGAS() {
             const { StartDate, EndDate, Reason } = this.newAvailability;
@@ -2198,16 +2410,6 @@
               })
               .submitAvailabilityViaGAS(payload);
           },
-          openHolidayRequestDialog() {
-            this.newHoliday = {
-              StartDate: '',
-              EndDate: '',
-              StartType: 'Full',
-              EndType: 'Full',
-              Reason: ''
-            };
-            this.requestHolidayDialog = true;
-          },
           openAvailabilityDialog() {
             this.newAvailability = {
               StartDate: '',
@@ -2237,7 +2439,7 @@
               .withFailureHandler(err => {
                 this.showSnackbar("❌ Error: " + err.message, "error");
               })
-              .approveOrRejectHoliday(item.HolidayRequestID, "approve", "");
+              .approveOrRejectHoliday(item.holidayRequestId, "approve", "");
           },
           rejectHoliday(item) {
             const reason = prompt("Enter reason for rejection:");
@@ -2251,69 +2453,232 @@
               .withFailureHandler(err => {
                 this.showSnackbar("❌ " + err.message, "error");
               })
-              .approveOrRejectHoliday(item.HolidayRequestID, "reject", reason);
-          },
-          fetchGoogleCalendarEvents() {
-            google.script.run
-              .withSuccessHandler((res) => {
-                if (res.error) {
-                  this.showSnackbar("❌ Error: " + res.message, "error");
-                } else {
-                  this.googleHolidayEvents = res.items || [];
-                  this.holidaysTaken = this.googleHolidayEvents.length;
-                  this.holidayRemaining = this.HOLIDAY_ENTITLEMENT - this.holidaysTaken;
-                }
-              })
-              .withFailureHandler(err => {
-                this.showSnackbar("❌ Script error: " + err.message, "error");
-              })
-              .getGoogleHolidayEventsFromGAS();
-          },
-          fetchAvailabilityBlocks() {
-            google.script.run
-              .withSuccessHandler((res) => {
-                if (Array.isArray(res)) {
-                  this.unavailableDates = res;
-                } else {
-                  this.unavailableDates = [];
-                  this.showSnackbar("⚠️ No availability data returned", "warning");
-                }
-              })
-              .withFailureHandler((err) => {
-                this.showSnackbar("❌ Failed to load availability: " + err.message, "error");
-              })
-              .getMyAvailability(); // ✅ Already in your backend
+              .approveOrRejectHoliday(item.holidayRequestId, "approve", "");
           },
           loadTeamHolidayCalendar() {
             google.script.run
               .withSuccessHandler(res => {
-                if (!Array.isArray(res)) return;
+                console.log('💥 loadTeamHolidayCalendar → raw payload:', res);
+                this.teamHolidayEvents = res;
 
-                const approvedOrRejected = [];
-                const pending = [];
-
-                res.forEach(item => {
-                  const parsed = {
-                    ...item,
-                    start: new Date(item.StartDate),
-                    end: new Date(item.EndDate),
-                    title: `${item.FullName} (${item.Status})`
-                  };
-
-                  if (item.Status === 'Pending') {
-                    pending.push(parsed);
-                  } else {
-                    approvedOrRejected.push(parsed);
-                  }
+                this.$nextTick(() => {
+                  // 🔍 Debug filtered computed lists
+                  console.log('✔️ APPROVED Events:', 
+                              this.approvedHolidayEvents.length, 
+                              JSON.parse(JSON.stringify(this.approvedHolidayEvents)));
+                  console.log('🕒 PENDING Events:', 
+                              this.pendingHolidayEvents.length, 
+                              JSON.parse(JSON.stringify(this.pendingHolidayEvents)));
+                  console.log('❌ REJECTED Events:', 
+                              this.rejectedHolidayEvents.length, 
+                              JSON.parse(JSON.stringify(this.rejectedHolidayEvents)));
                 });
-
-                this.teamHolidayEvents = approvedOrRejected;
-                this.pendingHolidayRequests = pending;
               })
               .withFailureHandler(err => {
                 this.showSnackbar("❌ Failed to load team holidays: " + err.message, "error");
               })
               .getTeamHolidayCalendar();
+          },
+renderHolidayCalendar() {
+  this.$nextTick(() => {
+    if (this.view !== 'holidayapprovals') return;
+
+    const calendarEl = document.getElementById('team-holiday-calendar');
+    if (!calendarEl) {
+      console.warn("⛔ Calendar element not found in Holiday Approvals view.");
+      return;
+    }
+
+    calendarEl.innerHTML = ""; // Clear previous
+
+    const events = this.teamHolidayEvents.map(e => ({
+      id: e.holidayRequestId,
+      title: `${e.fullName} (${e.status})`,
+      start: e.start,
+      end: e.end,
+      backgroundColor: this.statusColor(e.status),
+      borderColor: this.statusColor(e.status),
+      textColor: 'white',
+      allDay: true
+    }));
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      height: 650,
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth' // ✅ no list view
+      },
+      events
+    });
+
+    calendar.render();
+    setTimeout(() => {
+      calendar.changeView('dayGridMonth');
+    }, 10);
+  });
+},
+loadMyHolidayCalendar() {
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || !res.success || !Array.isArray(res.data)) {
+        console.warn("⚠️ Invalid response from getMyHolidayRequests:", res);
+        this.showSnackbar("⚠️ Failed to fetch your holiday data", "warning");
+        return;
+      }
+
+      this.googleHolidayEvents = res.data;
+      this.holidaysTaken = res.daysTaken || 0;
+      this.holidayPending = res.daysPending || 0;
+      this.holidayRemaining = res.daysRemaining || 0;
+
+      console.log("✔️ Days Taken:", this.holidaysTaken);
+      console.log("🕒 Days Pending:", this.holidayPending);
+      console.log("✔️ Days Remaining:", this.holidayRemaining);
+
+      if (this.view === 'myholidays' && this.activeMyHolidayTab === 3) {
+        this.$nextTick(() => this.renderMyHolidayCalendar());
+      }
+    })
+    .withFailureHandler((err) => {
+      console.error("❌ Script error:", err.message);
+      this.showSnackbar("❌ Script error: " + err.message, "error");
+    })
+    .getMyHolidayRequests();
+},
+renderMyHolidayCalendar() {
+  this.$nextTick(() => {
+    if (this.view !== 'myholidays') return;
+
+    const calendarEl = document.getElementById('my-holiday-calendar');
+    if (!calendarEl) {
+      console.warn("⛔ Calendar element not found in My Holidays view.");
+      return;
+    }
+
+    calendarEl.innerHTML = ""; // Clear previous
+
+    const events = this.googleHolidayEvents.map(e => ({
+      title: `${e.fullName || 'Holiday'} (${e.status})`,
+      start: e.start,
+      end: e.end,
+      backgroundColor: this.statusColor(e.status),
+      borderColor: this.statusColor(e.status),
+      textColor: 'white',
+      allDay: true
+    }));
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      height: 650,
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth' // ✅ no list view
+      },
+      events
+    });
+
+    calendar.render();
+    setTimeout(() => {
+      calendar.changeView('dayGridMonth');
+    }, 10);
+  });
+},
+async submitHolidayViaGAS() {
+  try {
+    const payload = {
+      StartDate: this.newHoliday.StartDate,
+      EndDate: this.newHoliday.EndDate,
+      StartType: this.newHoliday.StartType || "Full",
+      EndType: this.newHoliday.EndType || "Full",
+      Reason: this.newHoliday.Reason || "Annual Leave"
+    };
+
+    await google.script.run
+      .withSuccessHandler((res) => {
+        if (res.success) {
+          this.showSnackbar("✅ Holiday request submitted.");
+          this.requestHolidayDialog = false;
+
+          this.loadMyHolidayCalendar();
+
+          this.loadTeamHolidayCalendar(); 
+        } else {
+          this.showSnackbar("❌ " + res.error, "error");
+        }
+      })
+      .withFailureHandler((err) => {
+        this.showSnackbar("❌ Failed to submit holiday: " + err.message, "error");
+      })
+      .submitHolidayRequestViaGAS(payload);
+  } catch (err) {
+    this.showSnackbar("❌ Submit error: " + err.message, "error");
+  }
+},
+startReRequestHolidayWizard(item) {
+  this.reRequestWizardStep = 1;
+  this.reRequestHoliday = {
+    rejectionReason: item.reason || '',
+    StartDate: item.start,
+    EndDate: item.end,
+    StartType: 'Full',
+    EndType: 'Full',
+    Reason: item.reason || '',
+    originalItem: item
+  };
+  this.reRequestHolidayDialog = true;
+},
+confirmReRequest() {
+  const payload = {
+    StartDate: this.reRequestHoliday.StartDate,
+    EndDate: this.reRequestHoliday.EndDate,
+    StartType: this.reRequestHoliday.StartType,
+    EndType: this.reRequestHoliday.EndType,
+    Reason: this.reRequestHoliday.Reason
+  };
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res.success) {
+        this.showSnackbar("✅ Re-request submitted");
+        this.reRequestHolidayDialog = false;
+        this.loadMyHolidayCalendar(); // Refresh table + calendar
+      } else {
+        this.showSnackbar("❌ " + res.error, "error");
+      }
+    })
+    .withFailureHandler(err => {
+      this.showSnackbar("❌ Script error: " + err.message, "error");
+    })
+    .submitHolidayRequestViaGAS(payload);
+},
+cancelReRequest() {
+  if (!confirm("Are you sure you want to delete this request?")) return;
+  const id = this.reRequestHoliday.originalItem?.holidayRequestId;
+  if (!id) return;
+
+  google.script.run
+    .withSuccessHandler(() => {
+      this.showSnackbar("🗑️ Request cancelled");
+      this.reRequestHolidayDialog = false;
+      this.loadMyHolidayCalendar(); // Refresh table + calendar
+    })
+    .withFailureHandler(err => {
+      this.showSnackbar("❌ Failed to cancel: " + err.message, "error");
+    })
+    .deleteHolidayRequestById(id);
+},
+          openHolidayRequestDialog() {
+            this.newHoliday = {
+              StartDate: '',
+              EndDate: '',
+              StartType: 'Full',
+              EndType: 'Full',
+              Reason: ''
+            };
+            this.requestHolidayDialog = true;
           },
           promptRejectHoliday(item) {
             this.rejectTarget = item;
@@ -2370,12 +2735,77 @@
             this.showSnackbar("🚪 Logged out", "info");
           }
         },
+watch: {
+  activeMyHolidayTab(newVal) {
+    if (this.view === 'myholidays' && newVal === 3) {
+      this.$nextTick(() => {
+        const calendarEl = document.getElementById('my-holiday-calendar');
+        if (calendarEl) {
+          this.renderMyHolidayCalendar();
+        } else {
+          setTimeout(() => {
+            const el = document.getElementById('my-holiday-calendar');
+            if (el) {
+              this.renderMyHolidayCalendar();
+            } else {
+              console.warn("⛔ My Holidays Calendar element STILL not found after tab switch.");
+            }
+          }, 300);
+        }
+      });
+    }
+  },
+
+  activeApprovalHolidayTab(newVal) {
+    if (this.view === 'holidayapprovals' && newVal === 3) {
+      this.$nextTick(() => {
+        const calendarEl = document.getElementById('team-holiday-calendar');
+        if (calendarEl) {
+          this.renderHolidayCalendar();
+        } else {
+          setTimeout(() => {
+            const el = document.getElementById('team-holiday-calendar');
+            if (el) {
+              this.renderHolidayCalendar();
+            } else {
+              console.warn("⛔ Team Holiday Calendar element STILL not found after tab switch.");
+            }
+          }, 300);
+        }
+      });
+    }
+  }
+},
         computed: {
-          daysTaken() {
-            return this.holidaysTaken;
+          approvedHolidayEvents() {
+            return this.teamHolidayEvents.filter(
+              e => e.status && e.status.toLowerCase() === 'approved'
+            );
           },
-          daysRemaining() {
-            return this.holidayRemaining;
+          pendingHolidayEvents() {
+            return this.teamHolidayEvents.filter(
+              e => e.status === 'PendingManagerApproval' || e.status === 'PendingCFOApproval'
+            );
+          },
+          rejectedHolidayEvents() {
+            return this.teamHolidayEvents.filter(
+              e => e.status && e.status.toLowerCase() === 'rejected'
+            );
+          },
+          myApprovedHolidayEvents() {
+            return this.googleHolidayEvents.filter(e =>
+              e.status?.toLowerCase() === 'approved'
+            );
+          },
+          myPendingHolidayEvents() {
+            return this.googleHolidayEvents.filter(e =>
+              e => e.status === 'PendingManagerApproval' || e.status === 'PendingCFOApproval'
+            );
+          },
+          myRejectedHolidayEvents() {
+            return this.googleHolidayEvents.filter(e =>
+              e.status?.toLowerCase() === 'rejected'
+            );
           },
           formattedUnavailable() {
             return this.unavailableDates.map(ev => ({

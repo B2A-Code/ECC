@@ -1,184 +1,231 @@
-// Replace with your actual Calendar IDs
-const STAFF_HOLIDAY_CALENDAR_ID = 'c_0f679b8ddbbc4c4fe84f4be0938b7a8170a6dd47667a7b2dd46675dc4a74523c@group.calendar.google.com';
-const CONTRACTOR_AVAILABILITY_CALENDAR_ID = 'c_c4f71d0d3d33796a92c2dfe7ebc381e5bd6fb67bb57b06c00c433d4355f28b4e@group.calendar.google.com';
+/**
+*
+* Holiday Approvals
+* 
+*/
 
-function addHolidayToCalendar(user, startDate, endDate, summary) {
-  const calendar = CalendarApp.getCalendarById(STAFF_HOLIDAY_CALENDAR_ID);
-  if (!calendar) throw new Error("Staff holiday calendar not found.");
+function getTeamHolidayCalendar() {
+  Logger.log("🚀 getTeamHolidayCalendar started");
 
-  calendar.createAllDayEvent(summary, new Date(startDate), new Date(endDate), {
-    description: `Holiday for ${user.FirstName} ${user.LastName} (${user.Email})`,
-    extendedProperties: {
-      private: {
-        userID: user.UserID,
-        userEmail: user.Email,
-        type: "holiday"
-      }
-    }
-  });
-}
+  // 1. User & auth
+  const email = Session.getActiveUser().getEmail();
+  Logger.log(`🔐 Session user email: ${email}`);
 
-function getGoogleHolidayEventsFromGAS() {
-  try {
-    const now = new Date().toISOString();
-    const calendarId = STAFF_HOLIDAY_CALENDAR_ID;
-
-    const events = Calendar.Events.list(calendarId, {
-      timeMin: now,
-      showDeleted: false,
-      singleEvents: true,
-      maxResults: 100,
-      orderBy: 'startTime',
-      q: 'Holiday'
-    });
-
-    return events;
-  } catch (err) {
-    return {
-      error: true,
-      message: err.message || "Unknown error"
-    };
+  const user = getUserByEmail(email);
+  if (!user) {
+    Logger.log("❌ No user found for email, exiting.");
+    return [];
   }
+  Logger.log(`👤 Authenticated user: ${user.FirstName} ${user.LastName} (Role=${user.Role}, Dept=${user.Department})`);
+
+  if (user.Role !== "Manager") {
+    Logger.log(`🚫 Access denied: not a Manager (Role=${user.Role})`);
+    return [];
+  }
+
+  const ss        = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet     = ss.getSheetByName("HolidayRequests");
+  const userSheet = ss.getSheetByName("Users");
+  if (!sheet || !userSheet) {
+    Logger.log(`❌ Missing sheet(s): HolidayRequests=${!!sheet}, Users=${!!userSheet}`);
+    return [];
+  }
+  Logger.log("✅ Both sheets found");
+
+  const requestData    = sheet.getDataRange().getValues();
+  const requestHeaders = requestData.shift();
+  Logger.log(`📄 HolidayRequests: fetched ${requestData.length} rows; headers=${JSON.stringify(requestHeaders)}`);
+
+  const userData       = userSheet.getDataRange().getValues();
+  const userHeaders    = userData.shift();
+  Logger.log(`👥 Users: fetched ${userData.length} rows; headers=${JSON.stringify(userHeaders)}`);
+
+  const userMap = userData.reduce((m, row, idx) => {
+    const u = userHeaders.reduce((o, h, i) => {
+      o[h] = row[i];
+      return o;
+    }, {});
+    m[u.UserID] = u;
+    Logger.log(`   🔹 userMap[${u.UserID}] = ${u.FirstName} ${u.LastName}, Dept=${u.Department}`);
+    return m;
+  }, {});
+  Logger.log(`📌 Built userMap with ${Object.keys(userMap).length} entries`);
+
+  const toISO = val => {
+    try {
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? "" : d.toISOString();
+    } catch (e) {
+      Logger.log(`⚠️ toISO() failed for value=${val}: ${e}`);
+      return "";
+    }
+  };
+
+  const result = [];
+  requestData.forEach((row, i) => {
+    const rec = requestHeaders.reduce((o, h, j) => {
+      o[h] = row[j];
+      return o;
+    }, {});
+    Logger.log(`\n🔍 Processing row ${i+1}: HolidayRequestID=${rec.HolidayRequestID}, UserID=${rec.UserID}`);
+
+    const reqUser = userMap[rec.UserID];
+    if (!reqUser) {
+      Logger.log(`   ❗ No matching user in map for UserID=${rec.UserID}`);
+      return;
+    }
+    Logger.log(`   👤 Matches user ${reqUser.FirstName} ${reqUser.LastName} (Dept=${reqUser.Department})`);
+
+    if (reqUser.Department !== user.Department) {
+      Logger.log(`   🚫 Skipping due to department mismatch (${reqUser.Department} ≠ ${user.Department})`);
+      return;
+    }
+
+    const norm = {
+      holidayRequestId: rec.HolidayRequestID,
+      avatar:           reqUser.Avatar      || "",
+      fullName:         reqUser.FirstName + " " + reqUser.LastName,
+      email:            reqUser.Email,
+      start:            toISO(rec.StartDate),
+      end:              toISO(rec.EndDate),
+      numberOfDays:     rec.NumberOfDays,
+      reason:           rec.Reason          || "",
+      status:           rec.Status          || "",
+      createdAt:        toISO(rec.CreatedAt),
+      updatedAt:        toISO(rec.UpdatedAt),
+      requestDate:      toISO(rec.RequestDate),
+      managerApproved:  toISO(rec.ManagerApprovalTimestamp),
+      cfoApproved:      toISO(rec.CFOApprovalTimestamp)
+    };
+    Logger.log(`   ✅ Normalized record: ${JSON.stringify(norm)}`);
+
+    result.push(norm);
+  });
+
+  Logger.log(`🎯 Finished processing. Returning ${result.length} records`);
+  return result;
 }
 
 function rejectHolidayEventInCalendar(eventId, rejectionReason) {
-  try {
-    const calendar = CalendarApp.getCalendarById('your_shared_calendar_id@group.calendar.google.com');
-    const event = calendar.getEventById(eventId);
-    if (!event) throw new Error("Event not found");
+  Logger.log("📥 [rejectHolidayEventInCalendar] Function called");
+  Logger.log(`🔑 Received eventId: ${eventId}`);
+  Logger.log(`📄 Rejection reason: ${rejectionReason}`);
 
-    const description = event.getDescription() + `\n\n[REJECTED] ${rejectionReason}`;
-    event.setDescription(description);
-    event.setTag('status', 'Rejected'); // Optional if you're using extended properties
+  try {
+    if (!eventId || eventId.trim() === "") {
+      throw new Error("❌ No event ID provided");
+    }
+
+    // Normalize event ID if it doesn't include domain
+    if (!eventId.includes('@')) {
+      Logger.log("⚠️ Event ID missing domain, appending '@google.com'...");
+      eventId += '@google.com';
+      Logger.log(`ℹ️ Event ID modified to: ${eventId}`);
+    }
+
+    const calendarId = 'your_shared_calendar_id@group.calendar.google.com';
+    Logger.log(`📅 Using calendar ID: ${calendarId}`);
+
+    const calendar = CalendarApp.getCalendarById(calendarId);
+    if (!calendar) {
+      throw new Error(`❌ Calendar not found for ID: ${calendarId}`);
+    }
+    Logger.log("✅ Calendar retrieved successfully");
+
+    const event = calendar.getEventById(eventId);
+    if (!event) {
+      throw new Error(`❌ Event not found for ID: ${eventId}`);
+    }
+    Logger.log(`✅ Event found. Title: "${event.getTitle()}"`);
+
+    const oldDescription = event.getDescription();
+    Logger.log(`📝 Old description:\n${oldDescription}`);
+
+    const updatedDescription = `${oldDescription}\n\n[REJECTED] ${rejectionReason}`;
+    event.setDescription(updatedDescription);
+    Logger.log("✅ Event description updated with rejection note");
 
     return { success: true };
+
   } catch (err) {
+    Logger.log(`❌ Error in rejectHolidayEventInCalendar: ${err.message}`);
     return { success: false, error: err.message };
   }
 }
 
-function addAvailabilityToCalendar(user, startDate, endDate, reason) {
-  const calendar = CalendarApp.getCalendarById(CONTRACTOR_AVAILABILITY_CALENDAR_ID);
-  if (!calendar) throw new Error("Contractor availability calendar not found.");
-
-  calendar.createAllDayEvent(reason || "Unavailable", new Date(startDate), new Date(endDate), {
-    description: `Availability block for ${user.FirstName} ${user.LastName}`,
-    extendedProperties: {
-      private: {
-        userID: user.UserID,
-        userEmail: user.Email,
-        type: "availability"
-      }
-    }
-  });
-}
-
-function getMyCalendarEvents(calendarType) {
-  const user = getUserByEmail(Session.getActiveUser().getEmail());
-  if (!user) return [];
-
-  let calendarId;
-  if (calendarType === "holiday") {
-    if (!user.Permanent && user.Role !== "Manager") return [];
-    calendarId = STAFF_HOLIDAY_CALENDAR_ID;
-  } else if (calendarType === "availability") {
-    if (user.Permanent) return [];
-    calendarId = CONTRACTOR_AVAILABILITY_CALENDAR_ID;
-  } else {
-    return [];
-  }
-
-  const now = new Date();
-  const events = CalendarApp.getCalendarById(calendarId).getEvents(
-    now,
-    new Date(now.getFullYear() + 1, 11, 31)
-  );
-
-  return events
-    .filter(ev => ev.getTag("userEmail") === user.Email)
-    .map(ev => ({
-      id: ev.getId(),
-      summary: ev.getTitle(),
-      description: ev.getDescription(),
-      start: ev.getStartTime().toISOString(),
-      end: ev.getEndTime().toISOString()
-    }));
-}
-
-function getMyHolidayRequests() {
-  const user = getUserByEmail(Session.getActiveUser().getEmail());
-  if (!user || !(user.Permanent === true || user.Permanent === "TRUE")) return [];
-
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
-  const data = sheet.getDataRange().getValues();
-  const headers = data.shift();
-  const result = [];
-
-  for (const row of data) {
-    const record = headers.reduce((acc, h, i) => {
-      acc[h] = row[i];
-      return acc;
-    }, {});
-    if (record.UserID === user.UserID) {
-      result.push(record);
-    }
-  }
-
-  return result;
-}
-
-function getHolidayEntitlementSummary() {
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-  if (!user || (!user.Permanent && user.Role !== "Manager")) return null;
-
-  const totalEntitlement = 28; // UK default
-  const usedHours = parseFloat(user.HolidayEntitlementAccruedHours) || 0;
-  const daysTaken = usedHours / 7;
-  const daysLeft = totalEntitlement - daysTaken;
-
-  return {
-    totalEntitlement,
-    daysTaken: parseFloat(daysTaken.toFixed(1)),
-    daysLeft: parseFloat(daysLeft.toFixed(1))
-  };
-}
-
 function getPendingHolidayRequestsForManager() {
   const user = getUserByEmail(Session.getActiveUser().getEmail());
-  if (!user || user.Role !== "Manager") return [];
+  if (!user || user.Role !== "Manager") {
+    Logger.log("❌ Not a valid Manager user or user not found.");
+    return [];
+  }
 
   const requestsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
   const usersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Users");
 
-  const requests = requestsSheet.getDataRange().getValues();
-  const headers = requests.shift();
+  const requestRows = requestsSheet.getDataRange().getValues();
+  const requestHeaders = requestRows.shift();
+  const userRows = usersSheet.getDataRange().getValues();
+  const userHeaders = userRows.shift();
 
-  const users = usersSheet.getDataRange().getValues();
-  const userHeaders = users.shift();
   const userMap = {};
-  for (const row of users) {
-    const u = userHeaders.reduce((acc, h, i) => {
-      acc[h] = row[i];
+  for (const row of userRows) {
+    const userObj = userHeaders.reduce((acc, key, i) => {
+      acc[key] = row[i];
       return acc;
     }, {});
-    userMap[u.UserID] = u;
+    userMap[userObj.UserID] = userObj;
   }
 
-  return requests
-    .map(row => headers.reduce((acc, h, i) => {
-      acc[h] = row[i];
-      return acc;
-    }, {}))
-    .filter(req =>
-      req.Status === HOLIDAY_STATUSES.PENDING_MANAGER &&
-      userMap[req.UserID]?.Department === user.Department
-    )
-    .map(req => ({
-      ...req,
-      FullName: `${userMap[req.UserID]?.FirstName} ${userMap[req.UserID]?.LastName}`,
-      Email: userMap[req.UserID]?.Email
-    }));
+  const idIndex = requestHeaders.indexOf("HolidayRequestID");
+  const userIdIndex = requestHeaders.indexOf("UserID");
+  const startDateIndex = requestHeaders.indexOf("StartDate");
+  const endDateIndex = requestHeaders.indexOf("EndDate");
+  const statusIndex = requestHeaders.indexOf("Status");
+  const calendarEventIdIndex = requestHeaders.indexOf("CalendarEventID");
+
+  const missingColumns = [idIndex, userIdIndex, startDateIndex, endDateIndex, statusIndex, calendarEventIdIndex]
+    .some(idx => idx === -1);
+
+  if (missingColumns) {
+    Logger.log("❌ One or more required columns are missing in the HolidayRequests sheet.");
+    return [];
+  }
+
+  const pendingRequests = [];
+
+  for (const row of requestRows) {
+    const status = row[statusIndex];
+    const userId = row[userIdIndex];
+    const requestingUser = userMap[userId];
+
+    if (!requestingUser) {
+      Logger.log(`⚠️ No user found for UserID: ${userId}`);
+      continue;
+    }
+
+    if (
+      (status !== HOLIDAY_STATUSES.PENDING_MANAGER && status !== HOLIDAY_STATUSES.PENDING_CFO) ||
+      requestingUser.Department !== user.Department
+    ) {
+      continue;
+    }
+
+    pendingRequests.push({
+      holidayRequestId: row[idIndex],
+      userId,
+      fullName: `${requestingUser.FirstName} ${requestingUser.LastName}`,
+      start: row[startDateIndex],
+      end: row[endDateIndex],
+      status,
+      calendarEventId: row[calendarEventIdIndex],
+      avatar: requestingUser.Avatar || null,
+      email: requestingUser.Email || null
+    });
+  }
+
+  Logger.log(`📦 Returning ${pendingRequests.length} pending requests for manager ${user.Email}`);
+  return pendingRequests;
 }
 
 function getMyAvailability() {
@@ -209,245 +256,10 @@ function getMyAvailability() {
   return result;
 }
 
-/**
- * Returns all holiday requests for team members in the manager's department
- * with avatar URLs included.
- */
-function getTeamHolidayCalendar() {
-  Logger.log("🚀 getTeamHolidayCalendar started");
-
-  const email = Session.getActiveUser().getEmail();
-  Logger.log(`🔐 Session user email: ${email}`);
-
-  const user = getUserByEmail(email);
-  if (!user) {
-    Logger.log("❌ No user found for email");
-    return [];
-  }
-
-  Logger.log(`👤 Authenticated user: ${user.FirstName} ${user.LastName} (${user.Role})`);
-
-  if (user.Role !== "Manager") {
-    Logger.log("🚫 User is not a Manager. Access denied.");
-    return [];
-  }
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("HolidayRequests");
-  const userSheet = ss.getSheetByName("Users");
-
-  if (!sheet || !userSheet) {
-    Logger.log("❌ One or both required sheets are missing");
-    return [];
-  }
-
-  const requestData = sheet.getDataRange().getValues();
-  const requestHeaders = requestData.shift();
-  Logger.log(`📄 Fetched ${requestData.length} holiday request rows`);
-
-  const userData = userSheet.getDataRange().getValues();
-  const userHeaders = userData.shift();
-  Logger.log(`👥 Fetched ${userData.length} user rows`);
-
-  const userMap = userData.reduce((map, row) => {
-    const u = userHeaders.reduce((acc, h, i) => {
-      acc[h] = row[i];
-      return acc;
-    }, {});
-    map[u.UserID] = u;
-    return map;
-  }, {});
-
-  Logger.log(`📌 Built userMap with ${Object.keys(userMap).length} users`);
-
-  const normalizeISO = val => {
-    try {
-      const d = new Date(val);
-      return isNaN(d.getTime()) ? '' : d.toISOString();
-    } catch {
-      return '';
-    }
-  };
-
-  const result = [];
-
-  for (let i = 0; i < requestData.length; i++) {
-    const row = requestData[i];
-    const record = requestHeaders.reduce((acc, h, j) => {
-      acc[h] = row[j];
-      return acc;
-    }, {});
-
-    const reqUser = userMap[record.UserID];
-
-    if (reqUser) {
-      Logger.log(`🔍 Processing request [${i + 1}]: ${record.HolidayRequestID} for ${reqUser.FirstName} ${reqUser.LastName}`);
-
-      if (reqUser.Department === user.Department) {
-        Logger.log(`✅ Match: Department = ${reqUser.Department}`);
-
-        result.push({
-          ...record,
-          FullName: `${reqUser.FirstName} ${reqUser.LastName}`,
-          Email: reqUser.Email,
-          Avatar: reqUser.Avatar || '', // ✅ add avatar directly from the map
-          StartDate: normalizeISO(record.StartDate),
-          EndDate: normalizeISO(record.EndDate),
-          CreatedAt: normalizeISO(record.CreatedAt),
-          UpdatedAt: normalizeISO(record.UpdatedAt),
-          RequestDate: normalizeISO(record.RequestDate),
-          ManagerApprovalTimestamp: normalizeISO(record.ManagerApprovalTimestamp),
-          CFOApprovalTimestamp: normalizeISO(record.CFOApprovalTimestamp)
-        });
-      } else {
-        Logger.log(`🟡 Skipped: Department mismatch (${reqUser.Department} != ${user.Department})`);
-      }
-    } else {
-      Logger.log(`❗ No user found in userMap for UserID: ${record.UserID}`);
-    }
-  }
-
-  Logger.log(`🎯 Done! Returning ${result.length} matched holiday requests`);
-  return result;
-}
-
-function submitAvailabilityViaGAS(payload) {
-  try {
-    const user = getUserByEmail(Session.getActiveUser().getEmail());
-    if (!user || user.Permanent === true || user.Permanent === "TRUE") {
-      return { success: false, error: "Only contract staff can submit availability." };
-    }
-
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Availability");
-    if (!sheet) throw new Error("Missing 'Availability' sheet");
-
-    const newId = "AV" + Utilities.getUuid().slice(0, 8);
-    const now = new Date();
-
-    const calendar = CalendarApp.getCalendarById(CONTRACTOR_AVAILABILITY_CALENDAR_ID);
-    if (!calendar) throw new Error("Calendar not found");
-
-    const event = calendar.createAllDayEvent(payload.Reason || "Unavailable", new Date(payload.StartDate), new Date(payload.EndDate), {
-      description: `Availability block for ${user.FirstName} ${user.LastName}`,
-      extendedProperties: {
-        private: {
-          userID: user.UserID,
-          userEmail: user.Email,
-          type: "availability"
-        }
-      }
-    });
-
-    const eventId = event.getId();
-
-    sheet.appendRow([
-      newId,
-      user.UserID,
-      new Date(payload.StartDate),
-      new Date(payload.EndDate),
-      payload.Reason || "Unavailable",
-      payload.Repeat || "None",
-      now,
-      now,
-      eventId // 🔐 Track calendar event ID
-    ]);
-
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-}
-
-function removeCalendarEventsForUser(userEmail, calendarId, startDate, endDate) {
-  const cal = CalendarApp.getCalendarById(calendarId);
-  const events = cal.getEvents(new Date(startDate), new Date(endDate));
-  
-  for (const ev of events) {
-    if (ev.getTag("userEmail") === userEmail) {
-      ev.deleteEvent();
-    }
-  }
-}
-
-function submitHolidayRequestViaGAS(payload) {
-  try {
-    const email = Session.getActiveUser().getEmail();
-    const user = getUserByEmail(email);
-    if (!user || (!user.Permanent && user.Role !== "Manager")) {
-      return { success: false, error: "Not authorized" };
-    }
-
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
-    const now = new Date();
-    const newId = "HR" + (sheet.getLastRow() + 1).toString().padStart(4, "0");
-
-    const { StartDate, EndDate, StartType, EndType, Reason } = payload;
-    const start = new Date(StartDate);
-    const end = new Date(EndDate);
-    let numDays = (end - start) / (1000 * 60 * 60 * 24) + 1;
-
-    if (StartType === "Half") numDays -= 0.5;
-    if (EndType === "Half") numDays -= 0.5;
-
-    const availableDays = Math.max(0, parseFloat(user.HolidayEntitlementAccruedHours || 0) / 7);
-    if (numDays > availableDays) {
-      return {
-        success: false,
-        error: `You only have ${availableDays.toFixed(1)} days left. Requested: ${numDays.toFixed(1)}`
-      };
-    }
-
-    // Create Google Calendar placeholder event
-    const calendar = CalendarApp.getCalendarById(STAFF_HOLIDAY_CALENDAR_ID);
-    if (!calendar) throw new Error("Holiday calendar not found");
-
-    const calendarEvent = calendar.createAllDayEvent(`Holiday: ${user.FirstName} ${user.LastName}`, start, end, {
-      description: `Pending holiday for ${user.FirstName} ${user.LastName}`,
-      extendedProperties: {
-        private: {
-          userID: user.UserID,
-          userEmail: user.Email,
-          type: "holiday"
-        }
-      }
-    });
-
-    const eventId = calendarEvent.getId(); // 🔐 Track it!
-
-    sheet.appendRow([
-      newId,
-      user.UserID,
-      now.toISOString(),
-      StartDate,
-      EndDate,
-      numDays,
-      numDays * 7,
-      HOLIDAY_STATUSES.PENDING_MANAGER,
-      "",
-      "",
-      "", // Rejection reason
-      now.toISOString(),
-      now.toISOString(),
-      eventId
-    ]);
-
-    const managerEmail = getManagerEmail(user.Department);
-    MailApp.sendEmail(
-      managerEmail,
-      "🆕 Holiday Request Submitted",
-      `${user.FirstName} ${user.LastName} has submitted a holiday request.\n\nFrom: ${StartDate}\nTo: ${EndDate}\nDays: ${numDays.toFixed(1)}\n\nPlease review in the system.`
-    );
-
-    return { success: true, daysRequested: numDays };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-}
-
-
 function approveOrRejectHoliday(requestId, action, reason = "") {
   const user = getUserByEmail(Session.getActiveUser().getEmail());
   if (!user || (user.Role !== "Manager" && user.Role !== "CFO")) {
+    Logger.log("❌ Not authorized");
     return { success: false, error: "Not authorized" };
   }
 
@@ -471,11 +283,26 @@ function approveOrRejectHoliday(requestId, action, reason = "") {
     const row = data[i];
     if (row[idIndex] === requestId) {
       const currentStatus = row[statusIndex];
+      Logger.log(`🔎 Found request: ${requestId} with current status: ${currentStatus}`);
+
       const requestUser = getUserById(row[userIdIndex]);
+      if (!requestUser) {
+        Logger.log("❌ User not found for this request");
+        return { success: false, error: "User not found" };
+      }
+
+      Logger.log("📋 Row BEFORE update: " + JSON.stringify(row));
+      Logger.log("🧾 Row with headers BEFORE update:\n" + JSON.stringify(headers.reduce((obj, key, idx) => {
+        obj[key] = row[idx];
+        return obj;
+      }, {}), null, 2));
 
       if (action === "approve") {
-        const nextStatus = getNextHolidayStatus(currentStatus, user.Role);
+        const nextStatus = getNextHolidayStatus(currentStatus, user.Role, requestUser.Role);
+        Logger.log(`📌 Next status: ${nextStatus}`);
+
         if (!nextStatus) {
+          Logger.log("⛔ No next status returned from getNextHolidayStatus");
           return { success: false, error: "Approval not allowed at this stage" };
         }
 
@@ -484,13 +311,15 @@ function approveOrRejectHoliday(requestId, action, reason = "") {
         if (user.Role === "Manager") {
           row[managerTimestamp] = now.toISOString();
 
-          const cfo = getAllUsers().find(u => u.Role === "CFO");
-          if (cfo?.Email) {
-            MailApp.sendEmail(
-              cfo.Email,
-              "🔔 Holiday Request Awaiting CFO Approval",
-              `Request ${requestId} from ${requestUser.FirstName} ${requestUser.LastName} has been approved by the Manager and awaits your review.`
-            );
+          if (nextStatus === "PendingCFOApproval") {
+            const cfo = getAllUsers().find(u => u.Role === "CFO");
+            if (cfo?.Email) {
+              MailApp.sendEmail(
+                cfo.Email,
+                "🔔 Holiday Request Awaiting CFO Approval",
+                `Request ${requestId} from ${requestUser.FirstName} ${requestUser.LastName} has been approved by the Manager and awaits your review.`
+              );
+            }
           }
         }
 
@@ -499,25 +328,17 @@ function approveOrRejectHoliday(requestId, action, reason = "") {
           const hoursUsed = parseFloat(row[hoursUsedIndex]);
           deductHolidayHours(row[userIdIndex], hoursUsed);
 
-          const calendar = CalendarApp.getCalendarById(STAFF_HOLIDAY_CALENDAR_ID);
-          const event = calendar.createAllDayEvent(
-            `Holiday: ${requestUser.FirstName} ${requestUser.LastName}`,
-            new Date(row[startDateIndex]),
-            new Date(row[endDateIndex]),
-            {
-              description: `Approved holiday for ${requestUser.Email}`,
-              guests: requestUser.Email,
-              extendedProperties: {
-                private: {
-                  userID: requestUser.UserID,
-                  userEmail: requestUser.Email,
-                  type: "holiday"
-                }
-              }
-            }
+          // ✅ Use centralised calendar function
+          const event = addHolidayToCalendar(
+            requestUser,
+            row[startDateIndex],
+            row[endDateIndex],
+            `Holiday: ${requestUser.FirstName} ${requestUser.LastName}`
           );
 
-          row[calendarEventIdIndex] = event.getId();
+          if (event) {
+            row[calendarEventIdIndex] = event.getId();
+          }
         }
 
         MailApp.sendEmail(requestUser.Email, "✅ Holiday Approved", `Your holiday has been approved (${nextStatus}).`);
@@ -549,12 +370,636 @@ function approveOrRejectHoliday(requestId, action, reason = "") {
         MailApp.sendEmail(requestUser.Email, "❌ Holiday Rejected", `Reason: ${reason}`);
       }
 
+      Logger.log("📋 Row AFTER update: " + JSON.stringify(row));
+      Logger.log("🧾 Row with headers AFTER update:\n" + JSON.stringify(headers.reduce((obj, key, idx) => {
+        obj[key] = row[idx];
+        return obj;
+      }, {}), null, 2));
+
+      Logger.log(`💾 Writing updated row back to sheet at row ${i + 1}`);
       sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
       return { success: true };
     }
   }
 
+  Logger.log("❌ No request found with ID: " + requestId);
   return { success: false, error: "Request not found" };
+}
+
+/**
+*
+* My Holidays
+* 
+*/
+
+function getMyHolidayRequests() {
+  Logger.log("🚀 getMyHolidayRequests started");
+
+  const email = Session.getActiveUser().getEmail();
+  Logger.log(`🔐 Session email: ${email}`);
+
+  const user = getUserByEmail(email);
+  if (!user) {
+    Logger.log("❌ No user found");
+    return {
+      success: false,
+      error: "User not found",
+      data: [],
+      daysTaken: 0,
+      daysPending: 0,
+      daysRemaining: 28
+    };
+  }
+
+  Logger.log(`👤 Authenticated: ${user.FirstName} ${user.LastName} (UserID=${user.UserID})`);
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
+  if (!sheet) {
+    Logger.log("❌ HolidayRequests sheet missing");
+    return {
+      success: false,
+      error: "HolidayRequests sheet not found",
+      data: [],
+      daysTaken: 0,
+      daysPending: 0,
+      daysRemaining: 28
+    };
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data.shift();
+
+  Logger.log(`📄 Loaded ${data.length} rows`);
+
+  const toISO = val => {
+    try {
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? "" : d.toISOString();
+    } catch (e) {
+      return "";
+    }
+  };
+
+  const requests = [];
+  let totalApprovedDays = 0;
+  let totalPendingDays = 0; // 🆕
+
+  data.forEach((row) => {
+    const rec = headers.reduce((o, h, j) => {
+      o[h] = row[j];
+      return o;
+    }, {});
+
+    if (rec.UserID !== user.UserID) return;
+
+    const normalized = {
+      holidayRequestId: rec.HolidayRequestID,
+      avatar:           user.Avatar || "",
+      fullName:         `${user.FirstName} ${user.LastName}`,
+      email:            user.Email,
+      start:            toISO(rec.StartDate),
+      end:              toISO(rec.EndDate),
+      numberOfDays:     Number(rec.NumberOfDays || 0),
+      reason:           rec.RejectionReason || "",
+      status:           rec.Status || "",
+      createdAt:        toISO(rec.CreatedAt),
+      updatedAt:        toISO(rec.UpdatedAt),
+      requestDate:      toISO(rec.RequestDate),
+      managerApproved:  toISO(rec.ManagerApprovalTimestamp),
+      cfoApproved:      toISO(rec.CFOApprovalTimestamp)
+    };
+
+    requests.push(normalized);
+
+    const status = (normalized.status || "").toLowerCase();
+    if (status === "approved") {
+      totalApprovedDays += normalized.numberOfDays;
+    } else if (
+      status === "pendingmanagerapproval" ||
+      status === "pendingcfoapproval"
+    ) {
+      totalPendingDays += normalized.numberOfDays;
+    }
+  });
+
+  const HOLIDAY_ENTITLEMENT = Number(user.HolidayEntitlementAccruedHours || 28);
+  const daysRemaining = HOLIDAY_ENTITLEMENT - totalApprovedDays;
+
+  Logger.log(`✔️ Days Taken: ${totalApprovedDays}`);
+  Logger.log(`🕒 Days Pending: ${totalPendingDays}`);
+  Logger.log(`✔️ Days Remaining: ${daysRemaining}`);
+
+  return {
+    success: true,
+    data: requests,
+    daysTaken: totalApprovedDays,
+    daysPending: totalPendingDays, // 🆕 return pending days
+    daysRemaining
+  };
+}
+
+function getHolidayEntitlementSummary() {
+  const email = Session.getActiveUser().getEmail();
+  const user = getUserByEmail(email);
+  if (!user || (!user.Permanent && user.Role !== "Manager")) return null;
+
+  const totalEntitlement = 28; // UK default
+  const usedHours = parseFloat(user.HolidayEntitlementAccruedHours) || 0;
+  const daysTaken = usedHours / 7;
+  const daysLeft = totalEntitlement - daysTaken;
+
+  return {
+    totalEntitlement,
+    daysTaken: parseFloat(daysTaken.toFixed(1)),
+    daysLeft: parseFloat(daysLeft.toFixed(1))
+  };
+}
+
+function submitHolidayRequest(payload) {
+  const email = Session.getActiveUser().getEmail();
+  const user = getUserByEmail(email);
+  if (!user) {
+    return { success: false, error: "User not found." };
+  }
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
+  if (!sheet) {
+    return { success: false, error: "HolidayRequests sheet not found." };
+  }
+
+  const headers = sheet.getDataRange().getValues()[0];
+  const nextId = generateNextId("HREQ_", sheet);
+
+  const startDate = new Date(payload.StartDate);
+  const endDate = new Date(payload.EndDate);
+  const numberOfDays = calculateWorkingDays(startDate, endDate);
+
+  const now = new Date();
+
+  const row = headers.map(h => {
+    switch (h) {
+      case "HolidayRequestID": return nextId;
+      case "UserID": return user.UserID;
+      case "RequestDate": return now.toISOString();
+      case "StartDate": return now.toISOString();
+      case "EndDate": return now.toISOString();
+      case "NumberOfDays": return numberOfDays;
+      case "AccruedHoursUsed": return "";
+      case "Status": return "Pending";
+      case "ManagerApprovalTimestamp":
+      case "CFOApprovalTimestamp":
+      case "RejectionReason":
+      case "UpdatedAt": return "";
+      case "CreatedAt": return now.toISOString();
+      default: return "";
+    }
+  });
+
+  sheet.appendRow(row);
+
+  return { success: true, message: "Holiday request submitted." };
+}
+
+function submitHolidayRequestViaGAS(payload) {
+  try {
+    Logger.log("📥 [submitHolidayRequestViaGAS] Called with payload: " + JSON.stringify(payload));
+
+    const email = Session.getActiveUser().getEmail();
+    Logger.log(`📧 Authenticated user: ${email}`);
+
+    const user = getUserByEmail(email);
+    if (!user || (!user.Permanent && user.Role !== "Manager")) {
+      Logger.log("❌ Not authorized to submit request");
+      return { success: false, error: "Not authorized" };
+    }
+
+    Logger.log(`👤 User found: ${user.FirstName} ${user.LastName} (${user.Role})`);
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
+    if (!sheet) {
+      Logger.log("❌ HolidayRequests sheet not found");
+      return { success: false, error: "Sheet not found" };
+    }
+
+    const now = new Date();
+    const newId = "HR" + (sheet.getLastRow() + 1).toString().padStart(4, "0");
+    Logger.log(`🆔 Generated HolidayRequestID: ${newId}`);
+
+    const { StartDate, EndDate, StartType, EndType, Reason } = payload;
+    const start = new Date(StartDate);
+    const end = new Date(EndDate);
+    const startISO = start.toISOString();
+    const endISO = end.toISOString();
+
+    let workingDays = calculateWorkingDays(start, end);
+    if (StartType === "Half") workingDays -= 0.5;
+    if (EndType === "Half") workingDays -= 0.5;
+
+    Logger.log(`📅 Dates: ${startISO} → ${endISO}`);
+    Logger.log(`📊 Working Days: ${workingDays}`);
+
+    const totalEntitled = parseFloat(user.HolidayEntitlementAccruedHours || 0);
+    const usedDays = getUsedHolidayDays(user.UserID);
+    const availableDays = Math.max(0, totalEntitled - usedDays);
+
+    Logger.log(`💼 Entitled: ${totalEntitled} | Used: ${usedDays} | Available: ${availableDays}`);
+
+    if (workingDays > availableDays) {
+      const error = `You only have ${availableDays.toFixed(1)} days left. Requested: ${workingDays.toFixed(1)}`;
+      Logger.log("❌ " + error);
+      return { success: false, error };
+    }
+
+    const initialStatus = user.Role === "Employee"
+      ? HOLIDAY_STATUSES.PENDING_MANAGER
+      : HOLIDAY_STATUSES.PENDING_CFO;
+
+    Logger.log(`🧭 Initial status based on role (${user.Role}): ${initialStatus}`);
+
+    const calendar = CalendarApp.getCalendarById(STAFF_HOLIDAY_CALENDAR_ID);
+    if (!calendar) {
+      Logger.log("❌ Holiday calendar not found");
+      throw new Error("Holiday calendar not found");
+    }
+
+    Logger.log("📆 Creating calendar event...");
+    const calendarEvent = calendar.createAllDayEvent(
+      `Holiday: ${user.FirstName} ${user.LastName}`,
+      start,
+      end,
+      {
+        description: `Pending holiday for ${user.FirstName} ${user.LastName}\nReason: ${Reason || "Annual Leave"}`,
+        extendedProperties: {
+          private: {
+            userID: user.UserID,
+            userEmail: user.Email,
+            type: "holiday",
+            numberOfDays: workingDays.toString(),
+            reason: Reason || "Annual Leave",
+            status: initialStatus
+          }
+        }
+      }
+    );
+
+    const eventId = calendarEvent.getId();
+    Logger.log(`✅ Calendar event created. Event ID: ${eventId}`);
+
+    const headers = sheet.getDataRange().getValues()[0];
+    const row = headers.map(header => {
+      switch (header) {
+        case "HolidayRequestID": return newId;
+        case "UserID": return user.UserID;
+        case "RequestDate": return now.toISOString();
+        case "StartDate": return startISO;
+        case "EndDate": return endISO;
+        case "NumberOfDays": return workingDays;
+        case "AccruedHoursUsed": return workingDays * 7;
+        case "Status": return initialStatus;
+        case "ManagerApprovalTimestamp":
+        case "CFOApprovalTimestamp":
+        case "RejectionReason": return "";
+        case "CreatedAt":
+        case "UpdatedAt": return now.toISOString();
+        case "CalendarEventID": return eventId;
+        case "CalendarId": return STAFF_HOLIDAY_CALENDAR_ID;
+        default: return "";
+      }
+    });
+
+    Logger.log("📋 Row to append:\n" + JSON.stringify(row, null, 2));
+    sheet.appendRow(row);
+    Logger.log("💾 Row appended to sheet");
+
+    const managerEmail = getManagerEmail(user.Department);
+    Logger.log(`📨 Sending notification to manager: ${managerEmail}`);
+
+    MailApp.sendEmail(
+      managerEmail,
+      "🆕 Holiday Request Submitted",
+      `${user.FirstName} ${user.LastName} has submitted a holiday request.\n\nFrom: ${startISO}\nTo: ${endISO}\nDays: ${workingDays.toFixed(1)}\n\nPlease review in the system.`
+    );
+
+    Logger.log("✅ Notification sent. Request complete.");
+    return { success: true, daysRequested: workingDays };
+
+  } catch (err) {
+    Logger.log("❌ Error submitting holiday request: " + err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+function removeCalendarEventsForUser(userEmail, calendarId, startDate, endDate) {
+  const cal = CalendarApp.getCalendarById(calendarId);
+  const events = cal.getEvents(new Date(startDate), new Date(endDate));
+  
+  for (const ev of events) {
+    if (ev.getTag("userEmail") === userEmail) {
+      ev.deleteEvent();
+    }
+  }
+}
+
+
+
+/**
+*
+* My Avilability
+* 
+*/
+
+function getGoogleHolidayEventsFromGAS() {
+  try {
+    const now = new Date().toISOString();
+    const calendarId = STAFF_HOLIDAY_CALENDAR_ID;
+
+    const events = Calendar.Events.list(calendarId, {
+      timeMin: now,
+      showDeleted: false,
+      singleEvents: true,
+      maxResults: 100,
+      orderBy: 'startTime',
+      q: 'Holiday'
+    });
+
+    return events;
+  } catch (err) {
+    return {
+      error: true,
+      message: err.message || "Unknown error"
+    };
+  }
+}
+
+function addAvailabilityToCalendar(user, startDate, endDate, reason) {
+  const calendar = CalendarApp.getCalendarById(CONTRACTOR_AVAILABILITY_CALENDAR_ID);
+  if (!calendar) throw new Error("Contractor availability calendar not found.");
+
+  calendar.createAllDayEvent(reason || "Unavailable", new Date(startDate), new Date(endDate), {
+    description: `Availability block for ${user.FirstName} ${user.LastName}`,
+    extendedProperties: {
+      private: {
+        userID: user.UserID,
+        userEmail: user.Email,
+        type: "availability"
+      }
+    }
+  });
+}
+
+function submitHolidayRequestViaGAS(payload) {
+  try {
+    const email = Session.getActiveUser().getEmail();
+    const user = getUserByEmail(email);
+    if (!user || (!user.Permanent && user.Role !== "Manager")) {
+      return { success: false, error: "Not authorized" };
+    }
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
+    const now = new Date();
+    const newId = "HR" + (sheet.getLastRow() + 1).toString().padStart(4, "0");
+
+    const { StartDate, EndDate, StartType, EndType, Reason } = payload;
+    const start = new Date(StartDate);
+    const end = new Date(EndDate);
+    const startISO = start.toISOString();
+    const endISO = end.toISOString();
+
+    let workingDays = calculateWorkingDays(start, end);
+    if (StartType === "Half") workingDays -= 0.5;
+    if (EndType === "Half") workingDays -= 0.5;
+
+    const availableDays = Math.max(0, parseFloat(user.HolidayEntitlementAccruedHours || 0) / 7);
+    if (workingDays > availableDays) {
+      return {
+        success: false,
+        error: `You only have ${availableDays.toFixed(1)} days left. Requested: ${workingDays.toFixed(1)}`
+      };
+    }
+
+    // Determine initial status dynamically from role
+    const initialStatus = getInitialHolidayStatusByRole(user.Role);
+    Logger.log(`🧭 Initial status based on role (${user.Role}): ${initialStatus}`);
+
+    // 📅 Create placeholder event
+    const calendar = CalendarApp.getCalendarById(STAFF_HOLIDAY_CALENDAR_ID);
+    if (!calendar) throw new Error("Holiday calendar not found");
+
+    const calendarEvent = calendar.createAllDayEvent(
+      `Holiday: ${user.FirstName} ${user.LastName}`,
+      start,
+      end,
+      {
+        description: `Pending holiday for ${user.FirstName} ${user.LastName}\nReason: ${Reason || "Annual Leave"}`,
+        extendedProperties: {
+          private: {
+            userID: user.UserID,
+            userEmail: user.Email,
+            type: "holiday",
+            numberOfDays: workingDays.toString(),
+            reason: Reason || "Annual Leave",
+            status: initialStatus
+          }
+        }
+      }
+    );
+
+    const eventId = calendarEvent.getId();
+
+    // ✅ Append the request to the sheet
+    sheet.appendRow([
+      newId,
+      user.UserID,
+      now.toISOString(),
+      startISO,
+      endISO,
+      workingDays,
+      workingDays * 7,
+      initialStatus,
+      "",
+      "",
+      "", // Rejection reason
+      now.toISOString(),
+      now.toISOString(),
+      eventId, // CalendarEventID
+      STAFF_HOLIDAY_CALENDAR_ID // Calendar ID (N2:N)
+    ]);
+
+    // 📧 Notify Manager (always, even for CFO to keep record)
+    const managerEmail = getManagerEmail(user.Department);
+    if (managerEmail) {
+      MailApp.sendEmail(
+        managerEmail,
+        "🆕 Holiday Request Submitted",
+        `${user.FirstName} ${user.LastName} has submitted a holiday request.\n\nFrom: ${startISO}\nTo: ${endISO}\nDays: ${workingDays.toFixed(1)}\n\nPlease review in the system.`
+      );
+    }
+
+    return { success: true, daysRequested: workingDays };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+function cancelAvailabilityRequest(availabilityId) {
+  const user = getUserByEmail(Session.getActiveUser().getEmail());
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Availability");
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idIndex = headers.indexOf("AvailabilityID");
+  const userIndex = headers.indexOf("UserID");
+  const statusIndex = headers.indexOf("Status");
+  const calendarEventIdIndex = headers.indexOf("CalendarEventID");
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[idIndex] === availabilityId && row[userIndex] === user.UserID) {
+      row[statusIndex] = "Cancelled";
+
+      const eventId = row[calendarEventIdIndex];
+      if (eventId) {
+        try {
+          const calendar = CalendarApp.getCalendarById(CONTRACTOR_AVAILABILITY_CALENDAR_ID);
+          const event = calendar.getEventById(eventId);
+          if (event) event.deleteEvent();
+        } catch (e) {
+          Logger.log("Failed to delete availability event: " + e.message);
+        }
+      }
+
+      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      return { success: true };
+    }
+  }
+
+  return { success: false, error: "Not found or not authorized" };
+}
+
+function cancelHolidayRequest(requestId) {
+  const email = Session.getActiveUser().getEmail();
+  const user = getUserByEmail(email);
+  if (!user) return { success: false, error: "User not found" };
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  const idIndex = headers.indexOf("HolidayRequestID");
+  const userIndex = headers.indexOf("UserID");
+  const statusIndex = headers.indexOf("Status");
+  const calendarEventIdIndex = headers.indexOf("CalendarEventID");
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[idIndex] === requestId && row[userIndex] === user.UserID) {
+      const currentStatus = row[statusIndex];
+      if (currentStatus === HOLIDAY_STATUSES.APPROVED || currentStatus === HOLIDAY_STATUSES.REJECTED) {
+        return { success: false, error: "Cannot cancel after final decision" };
+      }
+
+      row[statusIndex] = HOLIDAY_STATUSES.CANCELLED;
+
+      const eventId = row[calendarEventIdIndex];
+      if (eventId) {
+        try {
+          const calendar = CalendarApp.getCalendarById(STAFF_HOLIDAY_CALENDAR_ID);
+          const event = calendar.getEventById(eventId);
+          if (event) event.deleteEvent();
+        } catch (e) {
+          Logger.log("Failed to delete calendar event: " + e.message);
+        }
+      }
+
+      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      MailApp.sendEmail(user.Email, "⛔ Holiday Request Cancelled", `Your request ${requestId} has been cancelled.`);
+
+      return { success: true };
+    }
+  }
+
+  return { success: false, error: "Request not found or not owned by user" };
+}
+
+/**
+*
+* Utility
+* 
+*/
+
+const STAFF_HOLIDAY_CALENDAR_ID = 'c_0f679b8ddbbc4c4fe84f4be0938b7a8170a6dd47667a7b2dd46675dc4a74523c@group.calendar.google.com';
+const CONTRACTOR_AVAILABILITY_CALENDAR_ID = 'c_c4f71d0d3d33796a92c2dfe7ebc381e5bd6fb67bb57b06c00c433d4355f28b4e@group.calendar.google.com';
+
+function getDepartmentByUserId(userId) {
+  const usersSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Users");
+  const usersData = usersSheet.getDataRange().getValues();
+  const headers = usersData[0];
+  const idIndex = headers.indexOf("UserID");
+  const deptIndex = headers.indexOf("Department");
+
+  for (let i = 1; i < usersData.length; i++) {
+    if (usersData[i][idIndex] === userId) {
+      return usersData[i][deptIndex];
+    }
+  }
+  return null;
+}
+
+function addHolidayToCalendar(user, startDate, endDate, summary) {
+  const calendar = CalendarApp.getCalendarById(STAFF_HOLIDAY_CALENDAR_ID);
+  if (!calendar) throw new Error("Staff holiday calendar not found.");
+
+  const department = getDepartmentByUserId(user.UserID);
+  const colorMap = {
+    "SIC": CalendarApp.EventColor.PALE_GREEN,
+    "Performance": CalendarApp.EventColor.PALE_RED,
+    "Operations": CalendarApp.EventColor.PALE_YELLOW,
+    "Creative": CalendarApp.EventColor.PALE_BLUE,
+    "B2AFC": CalendarApp.EventColor.PALE_ORANGE
+  };
+
+  const eventColor = colorMap[department] || CalendarApp.EventColor.GRAY;
+
+  calendar.createAllDayEvent(summary, new Date(startDate), new Date(endDate), {
+    description: `Holiday for ${user.FirstName} ${user.LastName} (${user.Email})`,
+    color: eventColor,
+    extendedProperties: {
+      private: {
+        userID: user.UserID,
+        userEmail: user.Email,
+        type: "holiday"
+      }
+    }
+  });
+}
+
+function generateNextId(prefix, sheet) {
+  const data = sheet.getDataRange().getValues();
+  const header = data.shift();
+  const idIndex = header.indexOf("HolidayRequestID");
+  let maxNum = 0;
+
+  data.forEach(row => {
+    const id = row[idIndex];
+    if (typeof id === "string" && id.startsWith(prefix)) {
+      const num = parseInt(id.replace(prefix, ""));
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+  });
+
+  return prefix + String(maxNum + 1).padStart(3, "0");
+}
+
+function calculateWorkingDays(startDate, endDate) {
+  let count = 0;
+  const cur = new Date(startDate);
+
+  while (cur <= endDate) {
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) count++; // Mon-Fri only
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  return count;
 }
 
 function calculateWorkingDays(startDate, endDate) {
@@ -586,52 +1031,6 @@ function deductHolidayHours(userId, hoursToDeduct) {
   sheet.getRange(userIdx + 1, hoursCol + 1).setValue(updated);
 }
 
-function cancelHolidayRequest(requestId) {
-  const email = Session.getActiveUser().getEmail();
-  const user = getUserByEmail(email);
-  if (!user) return { success: false, error: "User not found" };
-
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-
-  const idIndex = headers.indexOf("HolidayRequestID");
-  const userIndex = headers.indexOf("UserID");
-  const statusIndex = headers.indexOf("Status");
-  const calendarEventIdIndex = headers.indexOf("CalendarEventID");
-
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (row[idIndex] === requestId && row[userIndex] === user.UserID) {
-      const currentStatus = row[statusIndex];
-      if (currentStatus === HOLIDAY_STATUSES.APPROVED || currentStatus === HOLIDAY_STATUSES.REJECTED) {
-        return { success: false, error: "Cannot cancel after final decision" };
-      }
-
-      row[statusIndex] = HOLIDAY_STATUSES.CANCELLED;
-
-      // 🧹 Remove calendar event if it exists
-      const eventId = row[calendarEventIdIndex];
-      if (eventId) {
-        try {
-          const calendar = CalendarApp.getCalendarById(STAFF_HOLIDAY_CALENDAR_ID);
-          const event = calendar.getEventById(eventId);
-          if (event) event.deleteEvent();
-        } catch (e) {
-          Logger.log("Failed to delete calendar event: " + e.message);
-        }
-      }
-
-      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
-      MailApp.sendEmail(user.Email, "⛔ Holiday Request Cancelled", `Your request ${requestId} has been cancelled.`);
-
-      return { success: true };
-    }
-  }
-
-  return { success: false, error: "Request not found or not owned by user" };
-}
-
 function getManagerEmail(department) {
   const users = getAllUsers();
   const manager = users.find(u => u.Department === department && u.Role === "Manager");
@@ -658,13 +1057,23 @@ function getHolidayStatusLabel(status) {
   }
 }
 
-function getNextHolidayStatus(currentStatus, role) {
-  if (role === 'Manager' && currentStatus === HOLIDAY_STATUSES.PENDING_MANAGER) {
-    return HOLIDAY_STATUSES.PENDING_CFO;
+function getNextHolidayStatus(currentStatus, approverRole, requestUserRole) {
+  if (currentStatus === "PendingManagerApproval") {
+    if (approverRole === "Manager" && requestUserRole === "Employee") {
+      return "Approved";
+    }
+    if (approverRole === "Manager" && requestUserRole === "Manager") {
+      return "PendingCFOApproval";
+    }
+    if (approverRole === "CFO") {
+      return "Approved";
+    }
   }
-  if (role === 'CFO' && currentStatus === HOLIDAY_STATUSES.PENDING_CFO) {
-    return HOLIDAY_STATUSES.APPROVED;
+
+  if (currentStatus === "PendingCFOApproval" && approverRole === "CFO") {
+    return "Approved";
   }
+
   return null;
 }
 
@@ -692,6 +1101,17 @@ function getHolidayStatusMeta(status) {
   }
 
   return { label, color };
+}
+
+function getDepartmentColor(department) {
+  const pastelColors = {
+    SIC: "#FFB3BA",         // light red
+    Performance: "#BAE1FF", // light blue
+    Operations: "#BFFCC6",  // light green
+    Creative: "#FFFFBA",    // light yellow
+    B2AFC: "#D5BAFF"        // light purple
+  };
+  return pastelColors[department] || "#E0E0E0"; // fallback grey
 }
 
 function getStatusMeta(status) {
@@ -779,40 +1199,6 @@ function auditHolidayCalendarDiscrepancies() {
   }
 }
 
-function cancelAvailabilityRequest(availabilityId) {
-  const user = getUserByEmail(Session.getActiveUser().getEmail());
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Availability");
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idIndex = headers.indexOf("AvailabilityID");
-  const userIndex = headers.indexOf("UserID");
-  const statusIndex = headers.indexOf("Status");
-  const calendarEventIdIndex = headers.indexOf("CalendarEventID");
-
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (row[idIndex] === availabilityId && row[userIndex] === user.UserID) {
-      row[statusIndex] = "Cancelled";
-
-      const eventId = row[calendarEventIdIndex];
-      if (eventId) {
-        try {
-          const calendar = CalendarApp.getCalendarById(CONTRACTOR_AVAILABILITY_CALENDAR_ID);
-          const event = calendar.getEventById(eventId);
-          if (event) event.deleteEvent();
-        } catch (e) {
-          Logger.log("Failed to delete availability event: " + e.message);
-        }
-      }
-
-      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
-      return { success: true };
-    }
-  }
-
-  return { success: false, error: "Not found or not authorized" };
-}
-
 function nightlyCleanOldCalendarEvents() {
   const calendar = CalendarApp.getCalendarById(STAFF_HOLIDAY_CALENDAR_ID);
   const today = new Date();
@@ -832,7 +1218,6 @@ function nightlyCleanOldCalendarEvents() {
 
   Logger.log(`🧹 Cleaned ${count} old events from calendar`);
 }
-
 
 function seedHolidayRequestsToCalendar() {
   const calendarId = 'c_0f679b8ddbbc4c4fe84f4be0938b7a8170a6dd47667a7b2dd46675dc4a74523c@group.calendar.google.com';
@@ -925,3 +1310,68 @@ function getUserMap() {
   }
   return map;
 }
+
+function getInitialHolidayStatusByRole(role) {
+  switch (role) {
+    case "Employee":
+      return HOLIDAY_STATUSES.PENDING_MANAGER;
+    case "Manager":
+      return HOLIDAY_STATUSES.PENDING_CFO;
+    case "CFO":
+      return HOLIDAY_STATUSES.PENDING_CFO;
+    default:
+      return HOLIDAY_STATUSES.PENDING_MANAGER; // Fallback
+  }
+}
+
+function getUsedHolidayDays(userId) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("HolidayRequests");
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  const userIdIndex = headers.indexOf("UserID");
+  const daysIndex = headers.indexOf("NumberOfDays");
+  const statusIndex = headers.indexOf("Status");
+
+  let used = 0;
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const status = row[statusIndex];
+    const user = row[userIdIndex];
+    const days = parseFloat(row[daysIndex]);
+
+    if (user === userId && days && ["PendingManagerApproval", "PendingCFOApproval", "Approved"].includes(status)) {
+      used += days;
+    }
+  }
+  return used;
+}
+
+function debugUserCalendars() {
+  const email = Session.getActiveUser().getEmail();
+  Logger.log("🧪 Running debugUserCalendars...");
+  Logger.log(`🔐 Current user email: ${email}`);
+
+  if (email === "darknastyuk@gmail.com") {
+    Logger.log("🎯 Debugging for: darknastyuk@gmail.com (✅ matched)");
+  } else {
+    Logger.log("ℹ️ Not darknastyuk@gmail.com — this may affect access visibility.");
+  }
+
+  const calendars = CalendarApp.getAllCalendars();
+
+  if (!calendars.length) {
+    Logger.log("⚠️ No calendars accessible to this user.");
+    return;
+  }
+
+  Logger.log(`📦 Total calendars found: ${calendars.length}`);
+
+  calendars.forEach((cal, index) => {
+    Logger.log(`📆 [${index + 1}] ${cal.getName()} → ${cal.getId()}`);
+  });
+
+  Logger.log("✅ Calendar debug complete.");
+}
+
+

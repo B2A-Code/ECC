@@ -291,3 +291,27 @@ function getUserIdByEmail(email) {
   return null;
 }
 
+function forceUserAuth() {
+  const email = Session.getActiveUser().getEmail();
+  Logger.log("🔐 forceUserAuth triggered for: " + email);
+
+  const user = getUserByEmail(email);
+  if (!user) throw new Error("User not found");
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Users");
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const emailIndex = headers.indexOf("Email");
+  const scriptVerifiedIndex = headers.indexOf("ScriptVerified");
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][emailIndex] === email) {
+      sheet.getRange(i + 1, scriptVerifiedIndex + 1).setValue(true); // TRUE in W column
+      Logger.log(`✅ ScriptVerified set to TRUE for ${email}`);
+      return email;
+    }
+  }
+
+  throw new Error("User not found in Users sheet");
+}
+
